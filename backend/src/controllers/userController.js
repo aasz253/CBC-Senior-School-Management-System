@@ -5,6 +5,31 @@
 const User = require('../models/User');
 
 /**
+ * @desc    Get students by grade (admin/teacher)
+ * @route   GET /api/users/students
+ * @access  Private/Admin, Private/Teacher
+ */
+exports.getStudentsByGrade = async (req, res, next) => {
+  try {
+    const { grade } = req.query;
+    const query = { role: 'student', isActive: true };
+    if (grade) query.grade = grade;
+
+    const users = await User.find(query)
+      .select('-password -refreshToken')
+      .sort({ name: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Get all users (admin only)
  * @route   GET /api/users
  * @access  Private/Admin

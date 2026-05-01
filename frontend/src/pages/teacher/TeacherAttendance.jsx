@@ -59,7 +59,7 @@ const TeacherAttendance = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/users?role=student&grade=${selectedGrade}`);
+      const res = await api.get(`/users/students?grade=${selectedGrade}`);
       setStudents(res.data.users || []);
     } catch (err) {
       showError('Failed to load students');

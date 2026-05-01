@@ -8,13 +8,16 @@ const {
   deleteUser,
   toggleUserStatus,
   getStats,
+  getStudentsByGrade,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 
 router.use(protect);
-router.use(authorize('admin'));
 
-router.get('/stats', getStats);
+router.get('/students', authorize('admin', 'teacher'), getStudentsByGrade);
+router.get('/stats', authorize('admin'), getStats);
+
+router.use(authorize('admin'));
 router.route('/')
   .get(getUsers)
   .post(createUser);

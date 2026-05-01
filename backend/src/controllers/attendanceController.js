@@ -4,6 +4,7 @@
  */
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
+const SchoolDetails = require('../models/SchoolDetails');
 const PDFDocument = require('pdfkit');
 
 /**
@@ -174,101 +175,145 @@ exports.generateWeeklyPTFReport = async (req, res, next) => {
       return row;
     });
 
+    const school = await SchoolDetails.findOne();
+
     const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=PTF_Attendance_Grade_${grade}_WeekOf_${weekStart}.pdf`);
     doc.pipe(res);
 
-    const pageWidth = doc.page.width - 60;
+    // Header with school logo
+    if (school?.logo) {
+      try {
+        doc.image(school.logo, 30, 18, { width: 55, height: 55, align: 'left' });
+      } catch (e) {
+        console.error('Failed to load school logo:', e.message);
+      }
+    }
 
-    doc.fontSize(16).font('Helvetica-Bold').text('CBC SENIOR SCHOOL', { align: 'center' });
-    doc.fontSize(14).font('Helvetica-Bold').text('Weekly Attendance Report - PTF', { align: 'center' });
-    doc.moveDown(0.3);
-    doc.fontSize(11).font('Helvetica').text(`Grade: ${grade}`, { align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold').fillColor('#16A34A').text(school?.name || 'CBC SENIOR SCHOOL', 95, 20);
+    doc.fontSize(12).font('Helvetica-Bold').fillColor('#F97316').text('Weekly Attendance Report - PTF', 95, 40);
+    doc.fillColor('#000000');
+
+    doc.fontSize(10).font('Helvetica').text(`Grade: ${grade}`, { align: 'center' });
     doc.text(`Week: ${weekDays[0].name} (${weekDays[0].date}) - ${weekDays[4].name} (${weekDays[4].date})`, { align: 'center' });
     doc.text(`Generated: ${new Date().toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'center' });
-    doc.moveDown(0.5);
+
+    // Green divider line
+    doc.lineWidth(2).strokeColor('#16A34A');
+    doc.moveTo(30, 82).lineTo(doc.page.width - 30, 82).stroke();
+
+    doc.moveDown(0.3);
 
     const colWidths = {
-      no: 30,
-      admission: 70,
-      name: 150,
-      day: 80,
-      rate: 55,
-      remarks: 70,
+      no: 35,
+      admission: 65,
+      name: 160,
+      day: 75,
+      rate: 50,
+      remarks: 75,
     };
     const headers = ['No.', 'Adm No', 'Student Name', ...weekDays.map(d => d.name.substring(0, 3)), 'Rate', 'Remarks'];
-    const keys = ['no', 'admission', 'name', ...weekDays.map(d => d.date), 'attendanceRate', 'remarks'];
+    const colKeys = ['no', 'admission', 'name', ...weekDays.map(() => 'day'), 'rate', 'remarks'];
 
     const tableLeft = 30;
-    let y = doc.y;
-    const rowHeight = 18;
+    let y = 95;
+    const rowHeight = 20;
+    const headerHeight = 22;
 
-    doc.lineWidth(0.5);
+    // Draw header row with green background
+    doc.save();
+    let hx = tableLeft;
+    doc.rect(hx, y, doc.page.width - 60, headerHeight).fillAndStroke('#16A34A', '#16A34A');
+    headers.forEach((h, i) => {
+      doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold')
+        .text(h, hx + 2, y + 5, { width: colWidths[colKeys[i]] - 4, align: i <= 1 ? 'center' : 'left' });
+      hx += colWidths[colKeys[i]];
+    });
+    doc.restore();
+    y += headerHeight;
 
-    const drawRow = (cells, isHeader = false) => {
+    // Draw data rows
+    grid.forEach((student, idx) => {
+      if (y > doc.page.height - 80) {
+        doc.addPage();
+        y = 30;
+      }
+
+      const cells = [
+        String(idx + 1),
+        student.admissionNumber || '-',
+        student.name,
+        ...weekDays.map(d => {
+          const val = student[d.date];
+          if (val === 'Present') return 'P';
+          if (val === 'Absent') return 'A';
+          if (val === 'Late') return 'L';
+          return '-';
+        }),
+        student.attendanceRate,
+        student.remarks,
+      ];
+
+      const isEven = idx % 2 === 0;
       let x = tableLeft;
-      const colKeys = ['no', 'admission', 'name', ...weekDays.map(() => 'day'), 'rate', 'remarks'];
-
-      doc.rect(x, y, colWidths.no, rowHeight).fillAndStroke(isHeader ? '#E5E7EB' : '#FFFFFF', '#9CA3AF');
-      x += colWidths.no;
 
       cells.forEach((cell, i) => {
         const w = colWidths[colKeys[i]];
-        doc.rect(x, y, w, rowHeight).fillAndStroke(isHeader ? '#E5E7EB' : '#FFFFFF', '#9CA3AF');
+        doc.rect(x, y, w, rowHeight).fillAndStroke(isEven ? '#F9FAFB' : '#FFFFFF', '#D1D5DB');
         x += w;
       });
 
       x = tableLeft;
       cells.forEach((cell, i) => {
         const w = colWidths[colKeys[i]];
-        doc.fontSize(isHeader ? 8 : 8).font(isHeader ? 'Helvetica-Bold' : 'Helvetica')
-          .text(cell, x + 2, y + 4, { width: w - 4, height: rowHeight - 4, align: i === 0 ? 'center' : 'left' });
+        const align = i <= 1 ? 'center' : 'left';
+        let textColor = '#1F2937';
+        if (i >= 3 && i <= 7) {
+          const dayVal = student[weekDays[i - 3].date];
+          if (dayVal === 'Present') textColor = '#16A34A';
+          else if (dayVal === 'Absent') textColor = '#DC2626';
+          else if (dayVal === 'Late') textColor = '#D97706';
+        }
+
+        doc.fontSize(9).font(i <= 1 || i >= colKeys.length - 2 ? 'Helvetica-Bold' : 'Helvetica')
+          .fillColor(textColor)
+          .text(cell, x + 3, y + 4, { width: w - 6, height: rowHeight - 4, align });
         x += w;
       });
 
       y += rowHeight;
-    };
-
-    drawRow(headers, true);
-
-    grid.forEach((student, idx) => {
-      const cells = [
-        String(idx + 1),
-        student.admissionNumber || '-',
-        student.name,
-        ...weekDays.map(d => student[d.date]),
-        student.attendanceRate,
-        student.remarks,
-      ];
-      drawRow(cells);
-
-      if (y > doc.page.height - 60) {
-        doc.addPage();
-        y = 30;
-      }
     });
 
+    doc.fillColor('#000000');
     y += 10;
-    const totalPresent = grid.filter(s => s.remarks === 'Excellent' || s.remarks === 'Good').length;
+
+    const totalGood = grid.filter(s => s.remarks === 'Excellent' || s.remarks === 'Good').length;
     const totalPoor = grid.filter(s => s.remarks === 'Poor').length;
 
-    doc.fontSize(10).font('Helvetica-Bold').text(`Summary:`, tableLeft, y);
-    y += 15;
+    doc.lineWidth(1.5).strokeColor('#16A34A');
+    doc.moveTo(tableLeft, y - 5).lineTo(doc.page.width - 30, y - 5).stroke();
+
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#16A34A').text('Summary:', tableLeft, y);
+    doc.fillColor('#1F2937');
+    y += 16;
     doc.fontSize(9).font('Helvetica').text(`Total Students: ${grid.length}`, tableLeft, y);
     y += 14;
-    doc.text(`Excellent/Good Attendance: ${totalPresent}`, tableLeft, y);
+    doc.text(`Excellent/Good Attendance: ${totalGood}`, tableLeft, y);
     y += 14;
-    doc.text(`Poor Attendance (3+ absences): ${totalPoor}`, tableLeft, y);
+    doc.fillColor('#DC2626').text(`Poor Attendance (3+ absences): ${totalPoor}`, tableLeft, y);
+    doc.fillColor('#000000');
 
     y += 25;
     doc.fontSize(9).font('Helvetica').text('Class Teacher Signature: _________________________  Date: _______________', tableLeft, y);
-    y += 18;
+    y += 20;
     doc.text('Head of Institution Signature: _________________________  Date: _______________', tableLeft, y);
 
     doc.end();
   } catch (error) {
-    next(error);
+    if (!res.headersSent) {
+      next(error);
+    }
   }
 };
 
