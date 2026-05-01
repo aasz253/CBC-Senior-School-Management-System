@@ -24,7 +24,7 @@ const timetableSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Period number is required'],
     min: 1,
-    max: 10,
+    max: 30,
   },
   startTime: {
     type: String, // e.g., "08:00"
@@ -36,7 +36,6 @@ const timetableSchema = new mongoose.Schema({
   },
   subject: {
     type: String,
-    required: [true, 'Subject is required'],
     trim: true,
   },
   teacherId: {

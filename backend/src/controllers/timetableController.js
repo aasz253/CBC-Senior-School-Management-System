@@ -98,13 +98,14 @@ exports.getTimetableEntry = async (req, res, next) => {
  */
 exports.createTimetableEntry = async (req, res, next) => {
   try {
-    // Verify teacher exists
-    const teacher = await User.findById(req.body.teacherId);
-    if (!teacher || teacher.role !== 'teacher') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid teacher ID',
-      });
+    if (req.body.teacherId) {
+      const teacher = await User.findById(req.body.teacherId);
+      if (!teacher || teacher.role !== 'teacher') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid teacher ID',
+        });
+      }
     }
 
     const entry = await Timetable.create(req.body);

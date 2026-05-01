@@ -1070,28 +1070,20 @@ const generateTimetablePDF = async (req, res, next) => {
       groupedByDay[e.day].push(e);
     });
 
-    // Periods
-    const periods = [
-      { period: 1, startTime: '06:00', endTime: '06:40', label: 'P1' },
-      { period: 2, startTime: '06:40', endTime: '07:20', label: 'P2' },
-      { period: 3, startTime: '07:20', endTime: '08:00', label: 'P3' },
-      { period: 4, startTime: '08:00', endTime: '08:40', label: 'P4' },
-      { period: 5, startTime: '08:40', endTime: '09:20', label: 'P5' },
-      { period: 6, startTime: '09:20', endTime: '10:00', label: 'P6' },
-      { period: 7, startTime: '10:00', endTime: '10:30', label: 'BRK', type: 'break' },
-      { period: 8, startTime: '10:30', endTime: '11:10', label: 'P7' },
-      { period: 9, startTime: '11:10', endTime: '11:50', label: 'P8' },
-      { period: 10, startTime: '11:50', endTime: '12:30', label: 'P9' },
-      { period: 11, startTime: '12:30', endTime: '13:10', label: 'P10' },
-      { period: 12, startTime: '13:10', endTime: '13:50', label: 'LCH', type: 'lunch' },
-      { period: 13, startTime: '13:50', endTime: '14:30', label: 'P11' },
-      { period: 14, startTime: '14:30', endTime: '15:10', label: 'P12' },
-      { period: 15, startTime: '15:10', endTime: '15:50', label: 'P13' },
-      { period: 16, startTime: '15:50', endTime: '16:30', label: 'P14' },
-      { period: 17, startTime: '16:30', endTime: '17:10', label: 'P15' },
-      { period: 18, startTime: '17:10', endTime: '17:50', label: 'P16' },
-      { period: 19, startTime: '17:50', endTime: '18:00', label: 'ASM', type: 'assembly' },
-    ];
+    // Extract unique periods from entries
+    const periodMap = {};
+    entries.forEach(e => {
+      if (!periodMap[e.period]) {
+        periodMap[e.period] = {
+          period: e.period,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          label: e.periodType !== 'regular' ? e.periodType.toUpperCase().substring(0, 3) : `P${e.period}`,
+          type: e.periodType || 'regular',
+        };
+      }
+    });
+    const periods = Object.values(periodMap).sort((a, b) => a.period - b.period);
 
     const title = req.user.role === 'teacher' ? `${req.user.name}'s Timetable` : `Grade ${grade || req.user.grade} Timetable`;
 
