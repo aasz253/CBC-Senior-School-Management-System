@@ -385,9 +385,159 @@ const getStudentReportData = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Generate class fee report PDF
+ * @route   GET /api/reports/fees/:grade
+ * @access  Private (Admin)
+ */
+const generateFeeReport = async (req, res, next) => {
+  try {
+    const { grade } = req.params;
+    const { term, year } = req.query;
+
+    if (!term || !year) {
+      return res.status(400).json({ success: false, message: 'Term and year are required' });
+    }
+
+    const school = await SchoolDetails.findOne();
+    const gradeValue = grade.startsWith('Grade ') ? grade.replace('Grade ', '') : grade;
+
+    const students = await User.find({ role: 'student', grade: gradeValue })
+      .select('name admissionNumber')
+      .sort({ name: 1 });
+
+    if (students.length === 0) {
+      return res.status(404).json({ success: false, message: 'No students found for this class' });
+    }
+
+    const fees = await Fee.find({ grade: gradeValue, term: parseInt(term), year: parseInt(year) });
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 40 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=fee_report_Grade_${gradeValue}_T${term}_${year}.pdf`);
+    doc.pipe(res);
+
+    // Header
+    if (school?.logo) {
+      try { doc.image(school.logo, 40, 30, { width: 60 }); } catch (e) {}
+    }
+    doc.font('Helvetica-Bold').fontSize(18).text(school?.name || 'CBC Senior School', 110, 35, { align: 'center' });
+    doc.font('Helvetica').fontSize(10).text(school?.motto || 'Excellence in Education', 110, 55, { align: 'center' });
+    doc.moveTo(40, 85).lineTo(555, 85).stroke();
+
+    // Report title
+    doc.font('Helvetica-Bold').fontSize(14).text('FEE STATUS REPORT', 40, 100);
+    doc.font('Helvetica').fontSize(11);
+    doc.text(`Class: Grade ${gradeValue}`, 40, 122);
+    doc.text(`Term: ${term}, ${year}`, 250, 122);
+    doc.text(`Date Generated: ${new Date().toLocaleDateString('en-KE')}`, 410, 122);
+
+    // Table
+    const tableTop = 145;
+    doc.font('Helvetica-Bold').fontSize(9);
+    const colWidths = { no: 30, name: 140, adm: 100, total: 80, paid: 80, balance: 90, status: 80 };
+    let x = 40;
+    const headers = ['#', 'Student Name', 'Adm. No.', 'Total Fee', 'Paid', 'Balance', 'Status'];
+    const cols = [colWidths.no, colWidths.name, colWidths.adm, colWidths.total, colWidths.paid, colWidths.balance, colWidths.status];
+
+    // Table header background
+    doc.rect(x, tableTop, 600, 18).fill('#16a34a');
+    doc.fillColor('white');
+    cols.reduce((cx, w, i) => {
+      doc.font('Helvetica-Bold').fontSize(8).text(headers[i], cx + 2, tableTop + 4, { width: w - 4 });
+      return cx + w;
+    }, x);
+    doc.fillColor('black');
+
+    // Build student fee map
+    const feeMap = {};
+    fees.forEach(f => { feeMap[f.studentId.toString()] = f; });
+
+    let y = tableTop + 18;
+    let totalCollected = 0;
+    let totalExpected = 0;
+    let totalBalance = 0;
+
+    students.forEach((s, i) => {
+      if (y > 720) {
+        doc.addPage();
+        y = 40;
+        doc.rect(x, y, 600, 18).fill('#16a34a');
+        doc.fillColor('white');
+        cols.reduce((cx, w, ci) => {
+          doc.font('Helvetica-Bold').fontSize(8).text(headers[ci], cx + 2, y + 4, { width: w - 4 });
+          return cx + w;
+        }, x);
+        doc.fillColor('black');
+        y += 18;
+      }
+
+      const bgColor = i % 2 === 0 ? '#f9fafb' : '#ffffff';
+      doc.rect(x, y, 600, 16).fill(bgColor);
+
+      const fee = feeMap[s._id.toString()];
+      const paid = fee?.amountPaid || 0;
+      const totalDue = fee?.totalDue || 0;
+      const balance = fee?.balance || totalDue;
+      const status = balance <= 0 ? 'CLEARED' : paid > 0 ? 'PARTIAL' : 'UNPAID';
+
+      totalCollected += paid;
+      totalExpected += totalDue;
+      totalBalance += balance;
+
+      doc.font('Helvetica').fontSize(8);
+      doc.text(`${i + 1}`, x + 2, y + 3, { width: colWidths.no });
+      doc.text(s.name, x + colWidths.no + 2, y + 3, { width: colWidths.name - 4, ellipsis: true });
+      doc.text(s.admissionNumber || 'N/A', x + colWidths.no + colWidths.name + 2, y + 3, { width: colWidths.adm - 4 });
+      doc.text(`KES ${totalDue.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + 2, y + 3, { width: colWidths.total - 4 });
+      doc.text(`KES ${paid.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + colWidths.total + 2, y + 3, { width: colWidths.paid - 4 });
+      doc.text(`KES ${balance.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + colWidths.total + colWidths.paid + 2, y + 3, { width: colWidths.balance - 4 });
+
+      // Status color
+      const statusColor = status === 'CLEARED' ? '#16a34a' : status === 'PARTIAL' ? '#f59e0b' : '#ef4444';
+      doc.fillColor(statusColor).font('Helvetica-Bold').fontSize(8).text(
+        status,
+        x + colWidths.no + colWidths.name + colWidths.adm + colWidths.total + colWidths.paid + colWidths.balance + 2,
+        y + 3,
+        { width: colWidths.status - 4 }
+      );
+      doc.fillColor('black');
+
+      doc.moveTo(x, y + 16).lineTo(x + 600, y + 16).strokeColor('#e5e7eb').lineWidth(0.5).stroke().strokeColor('black').lineWidth(1);
+      y += 16;
+    });
+
+    // Totals row
+    y += 8;
+    doc.rect(x, y, 600, 18).fill('#dcfce7');
+    doc.font('Helvetica-Bold').fontSize(9);
+    doc.text('TOTALS', x + 2, y + 4, { width: colWidths.no + colWidths.name + colWidths.adm });
+    doc.text(`KES ${totalExpected.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + 2, y + 4, { width: colWidths.total - 4 });
+    doc.text(`KES ${totalCollected.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + colWidths.total + 2, y + 4, { width: colWidths.paid - 4 });
+    doc.text(`KES ${totalBalance.toLocaleString()}`, x + colWidths.no + colWidths.name + colWidths.adm + colWidths.total + colWidths.paid + 2, y + 4, { width: colWidths.balance - 4 });
+
+    y += 28;
+    doc.font('Helvetica').fontSize(10);
+    doc.text(`Total Students: ${students.length}`, 40, y);
+    doc.text(`Collection Rate: ${totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : 0}%`, 300, y);
+
+    // Footer
+    doc.font('Helvetica-Oblique').fontSize(8).text(
+      `Generated on ${new Date().toLocaleString('en-KE')} | CBC Senior School Management System`,
+      40, 760, { align: 'center' }
+    );
+
+    doc.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   generateStudentReport,
   generateClassReport,
   getStudentReportData,
   calculatePositions,
+  generateFeeReport,
 };

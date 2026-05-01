@@ -46,6 +46,8 @@ const AdminFees = () => {
   const [totalStudents, setTotalStudents] = useState(0);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [reportTerm, setReportTerm] = useState('');
+  const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [feeFormData, setFeeFormData] = useState({
     grade: '',
@@ -63,8 +65,7 @@ const AdminFees = () => {
   const { error: showError, success: showSuccess } = useToast();
 
   const itemsPerPage = 10;
-  const grades = ['all', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
-    'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['all', 'Grade 10', 'Grade 11', 'Grade 12'];
 
   useEffect(() => {
     fetchData();
@@ -156,6 +157,38 @@ const AdminFees = () => {
       showError(err.response?.data?.message || 'Failed to record payment');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    const currentGrade = gradeFilter !== 'all' ? gradeFilter : 'Grade 10';
+    const term = prompt('Enter term (1, 2, or 3):', reportTerm || '1');
+    if (!term || !['1', '2', '3'].includes(term)) {
+      showError('Please enter a valid term (1, 2, or 3)');
+      return;
+    }
+    const year = prompt('Enter year:', reportYear || '2026');
+    if (!year) {
+      showError('Please enter a valid year');
+      return;
+    }
+    setReportTerm(term);
+    setReportYear(year);
+    try {
+      const response = await api.get(`/reports/fees/${currentGrade}?term=${term}&year=${year}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `fee_report_${currentGrade.replace(' ', '_')}_T${term}_${year}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Fee report downloaded');
+    } catch (err) {
+      showError('Failed to generate fee report');
     }
   };
 
@@ -324,9 +357,9 @@ const AdminFees = () => {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Student Fee Balances</h3>
-          <button className="btn flex items-center gap-2 text-sm">
+          <button onClick={handleExportPDF} className="btn flex items-center gap-2 text-sm">
             <Download className="w-4 h-4" />
-            Export
+            Export PDF
           </button>
         </div>
         <div className="overflow-x-auto">

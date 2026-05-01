@@ -236,16 +236,16 @@ router.get('/attendance/trend', async (req, res) => {
 router.get('/fees/stats', async (req, res) => {
   try {
     const totalExpected = await Fee.aggregate([
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      { $group: { _id: null, total: { $sum: '$totalDue' } } },
     ]);
-    const totalPaid = await Payment.aggregate([
-      { $group: { _id: null, total: { $sum: '$amount' } } },
+    const totalPaid = await Fee.aggregate([
+      { $group: { _id: null, total: { $sum: '$amountPaid' } } },
     ]);
     const studentsWithBalance = await Fee.countDocuments({ balance: { $gt: 0 } });
     const studentsCleared = await Fee.countDocuments({ balance: { $lte: 0 } });
 
     const byGrade = await Fee.aggregate([
-      { $group: { _id: '$grade', total: { $sum: '$totalAmount' }, balance: { $sum: '$balance' }, count: { $sum: 1 } } },
+      { $group: { _id: '$grade', total: { $sum: '$totalDue' }, balance: { $sum: '$balance' }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]);
 
@@ -270,12 +270,23 @@ router.get('/fees/students', async (req, res) => {
   try {
     const { page = 1, limit = 10, grade, search, balanceStatus } = req.query;
     const query = { role: 'student' };
-    if (grade && grade !== 'all') query.grade = grade;
+    if (grade && grade !== 'all') {
+      // Convert "Grade 10" to "10" for DB query
+      const gradeValue = grade.startsWith('Grade ') ? grade.replace('Grade ', '') : grade;
+      query.grade = gradeValue;
+    }
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { admissionNumber: { $regex: search, $options: 'i' } },
+      ];
+    }
 
+    const total = await User.countDocuments(query);
     const students = await User.find(query)
       .select('name email grade admissionNumber')
       .skip((page - 1) * limit)
-      .limit(limit * 1);
+      .limit(parseInt(limit));
 
     const studentsWithFees = await Promise.all(
       students.map(async (s) => {
@@ -284,25 +295,30 @@ router.get('/fees/students', async (req, res) => {
           _id: s._id,
           name: s.name,
           email: s.email,
-          grade: s.grade,
+          grade: s.grade ? `Grade ${s.grade}` : 'N/A',
           admissionNumber: s.admissionNumber,
           balance: fee?.balance || 0,
-          totalAmount: fee?.totalAmount || 0,
-          paidAmount: fee?.paidAmount || 0,
+          totalFees: fee?.totalDue || 0,
+          paid: fee?.amountPaid || 0,
+          term: fee?.term || '-',
+          year: fee?.year || '-',
+          isFullyPaid: fee?.isFullyPaid || false,
         };
       })
     );
 
-    const filtered = balanceStatus !== 'all'
-      ? studentsWithFees.filter(s => balanceStatus === 'cleared' ? s.balance <= 0 : s.balance > 0)
-      : studentsWithFees;
-
-    const total = await User.countDocuments(query);
+    const filtered = balanceStatus === 'paid'
+      ? studentsWithFees.filter(s => s.balance <= 0)
+      : balanceStatus === 'unpaid'
+        ? studentsWithFees.filter(s => s.paid === 0 && s.totalFees > 0)
+        : balanceStatus === 'partial'
+          ? studentsWithFees.filter(s => s.paid > 0 && s.balance > 0)
+          : studentsWithFees;
 
     res.json({
       students: filtered,
-      total: total,
-      totalPages: Math.ceil(total / limit),
+      total: filtered.length,
+      totalPages: Math.ceil(filtered.length / limit),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -311,13 +327,10 @@ router.get('/fees/students', async (req, res) => {
 
 router.get('/fees/structures', async (req, res) => {
   try {
-    const structures = await Fee.distinct('grade')
-      .then(async () => {
-        return await Fee.aggregate([
-          { $group: { _id: { grade: '$grade', term: '$term', year: '$year' }, amount: { $first: '$totalAmount' }, count: { $sum: 1 } } },
-          { $sort: { '_id.year': -1, '_id.term': 1, '_id.grade': 1 } },
-        ]);
-      });
+    const structures = await Fee.aggregate([
+      { $group: { _id: { grade: '$grade', term: '$term', year: '$year' }, amount: { $first: '$totalDue' }, count: { $sum: 1 } } },
+      { $sort: { '_id.year': -1, '_id.term': 1, '_id.grade': 1 } },
+    ]);
 
     res.json(structures.map(s => ({
       grade: s._id.grade || 'N/A',
@@ -334,21 +347,33 @@ router.get('/fees/structures', async (req, res) => {
 router.post('/fees/structures', async (req, res) => {
   try {
     const { grade, term, year, amount, description } = req.body;
-    const students = await User.find({ role: 'student', grade });
+    // Convert "Grade 10" to "10" for DB
+    const gradeValue = grade.startsWith('Grade ') ? grade.replace('Grade ', '') : grade;
+
+    const students = await User.find({ role: 'student', grade: gradeValue });
+    if (students.length === 0) {
+      return res.status(400).json({ success: false, message: `No students found for Grade ${gradeValue}` });
+    }
 
     const fees = students.map(s => ({
       studentId: s._id,
-      grade,
-      term,
-      year,
-      totalAmount: amount,
-      balance: amount,
-      paidAmount: 0,
-      description,
+      grade: gradeValue,
+      term: parseInt(term),
+      year: parseInt(year),
+      totalDue: parseFloat(amount),
+      pathway: s.pathway,
     }));
 
-    await Fee.insertMany(fees);
-    res.json({ success: true, message: `${fees.length} fee records created` });
+    // Use upsert to avoid duplicate key errors
+    for (const fee of fees) {
+      await Fee.findOneAndUpdate(
+        { studentId: fee.studentId, term: fee.term, year: fee.year },
+        { $set: { totalDue: fee.totalDue, grade: fee.grade, pathway: fee.pathway } },
+        { upsert: true, new: true }
+      );
+    }
+
+    res.json({ success: true, message: `${fees.length} fee records created/updated` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -367,8 +392,7 @@ router.post('/fees/payments', async (req, res) => {
 
     const fee = await Fee.findOne({ studentId }).sort({ year: -1, term: -1 });
     if (fee) {
-      fee.balance -= amount;
-      fee.paidAmount += amount;
+      fee.amountPaid += parseFloat(amount);
       await fee.save();
     }
 
