@@ -3,8 +3,10 @@
  */
 import axios from 'axios';
 
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -35,7 +37,7 @@ api.interceptors.response.use(
 
       try {
         // Try to refresh token
-        const response = await axios.post('/api/auth/refresh', {});
+        const response = await axios.post(`${API_URL}/auth/refresh`, {});
 
         const { token } = response.data;
         localStorage.setItem('token', token);
