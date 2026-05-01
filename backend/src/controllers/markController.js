@@ -1,324 +1,228 @@
 /**
- * Mark Controller
- * CBC competency-based marks management with role-based access
+ * Mark Controller - Full CRUD with position calculation
  */
 const Mark = require('../models/Mark');
 const User = require('../models/User');
+const { calculatePositions } = require('./reportController');
 
 /**
- * @desc    Get marks - role-based access
+ * @desc    Get marks - role-based
  * @route   GET /api/marks
- * @access  Private (Admin: all, Teacher: own class/subject, Student: own)
+ * @access  Private
  */
-exports.getMarks = async (req, res, next) => {
+const getMarks = async (req, res) => {
   try {
-    const { studentId, subject, grade, term, year, assessmentType } = req.query;
+    const { grade, term, year, subject, assessmentType } = req.query;
     const query = {};
 
-    // Role-based filtering
-    if (req.user.role === 'student') {
-      // Students can only see their own marks
+    if (req.user.role === 'teacher') {
+      query.teacherId = req.user.id;
+    } else if (req.user.role === 'student') {
       query.studentId = req.user.id;
-    } else if (req.user.role === 'teacher') {
-      // Teachers can only see marks for their assigned class/subjects
-      if (req.user.assignedClass) {
-        // Filter by class if teacher has assigned class
-        const students = await User.find({
-          role: 'student',
-          assignedClass: req.user.assignedClass,
-        }).select('_id');
-        query.studentId = { $in: students.map(s => s._id) };
-      }
-      if (req.user.assignedSubjects && req.user.assignedSubjects.length > 0) {
-        query.subject = { $in: req.user.assignedSubjects };
-      }
     }
-    // Admin can see all marks (no additional filter)
 
-    // Apply additional filters
-    if (studentId) query.studentId = studentId;
-    if (subject) query.subject = subject;
     if (grade) query.grade = grade;
-    if (term) query.term = term;
-    if (year) query.year = year;
+    if (term) query.term = parseInt(term);
+    if (year) query.year = parseInt(year);
+    if (subject) query.subject = subject;
     if (assessmentType) query.assessmentType = assessmentType;
 
     const marks = await Mark.find(query)
-      .populate('studentId', 'name admissionNumber grade pathway')
+      .populate('studentId', 'name admissionNumber grade')
       .populate('teacherId', 'name')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      count: marks.length,
-      marks,
-    });
-  } catch (error) {
-    next(error);
+    res.json({ success: true, count: marks.length, marks });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
- * @desc    Get single mark
- * @route   GET /api/marks/:id
- * @access  Private
- */
-exports.getMark = async (req, res, next) => {
-  try {
-    const mark = await Mark.findById(req.params.id)
-      .populate('studentId', 'name admissionNumber grade pathway')
-      .populate('teacherId', 'name');
-
-    if (!mark) {
-      return res.status(404).json({
-        success: false,
-        message: 'Mark not found',
-      });
-    }
-
-    // Role-based access check
-    if (req.user.role === 'student' && mark.studentId._id.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this mark',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      mark,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Create mark (teacher or admin)
+ * @desc    Create mark
  * @route   POST /api/marks
  * @access  Private (Teacher/Admin)
  */
-exports.createMark = async (req, res, next) => {
+const createMark = async (req, res) => {
   try {
-    // Add teacher ID from authenticated user
-    req.body.teacherId = req.user.id;
-
-    // Verify student exists and is actually a student
-    const student = await User.findById(req.body.studentId);
-    if (!student || student.role !== 'student') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid student ID',
-      });
-    }
-
-    // Teacher authorization check
+    const markData = { ...req.body };
     if (req.user.role === 'teacher') {
-      const isAuthorized =
-        req.user.assignedSubjects.includes(req.body.subject) ||
-        req.user.role === 'admin';
-
-      if (!isAuthorized) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to enter marks for this subject',
-        });
-      }
+      markData.teacherId = req.user.id;
     }
 
-    const mark = await Mark.create(req.body);
-
-    const populatedMark = await Mark.findById(mark._id)
-      .populate('studentId', 'name admissionNumber grade pathway')
+    const mark = await Mark.create(markData);
+    const populated = await Mark.findById(mark._id)
+      .populate('studentId', 'name admissionNumber grade')
       .populate('teacherId', 'name');
 
-    res.status(201).json({
-      success: true,
-      mark: populatedMark,
-    });
-  } catch (error) {
-    next(error);
+    res.status(201).json({ success: true, mark: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
- * @desc    Bulk create marks (for entering marks for entire class)
+ * @desc    Bulk create marks
  * @route   POST /api/marks/bulk
  * @access  Private (Teacher/Admin)
  */
-exports.bulkCreateMarks = async (req, res, next) => {
+const bulkCreateMarks = async (req, res) => {
   try {
     const { marks } = req.body;
-
     if (!Array.isArray(marks) || marks.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Marks array is required',
-      });
+      return res.status(400).json({ success: false, message: 'Marks array required' });
     }
 
-    // Add teacher ID to all marks
-    const marksWithTeacher = marks.map(mark => ({
-      ...mark,
-      teacherId: req.user.id,
-    }));
-
-    const createdMarks = await Mark.insertMany(marksWithTeacher);
-
-    res.status(201).json({
-      success: true,
-      count: createdMarks.length,
-      message: `${createdMarks.length} marks created successfully`,
-    });
-  } catch (error) {
-    next(error);
+    const created = await Mark.insertMany(marks);
+    res.status(201).json({ success: true, count: created.length, message: `${created.length} marks created` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
  * @desc    Update mark
  * @route   PUT /api/marks/:id
- * @access  Private (Teacher who created it or Admin)
+ * @access  Private (Teacher/Admin)
  */
-exports.updateMark = async (req, res, next) => {
+const updateMark = async (req, res) => {
   try {
-    let mark = await Mark.findById(req.params.id);
+    const mark = await Mark.findById(req.params.id);
+    if (!mark) return res.status(404).json({ success: false, message: 'Mark not found' });
 
-    if (!mark) {
-      return res.status(404).json({
-        success: false,
-        message: 'Mark not found',
-      });
-    }
-
-    // Authorization: only the teacher who created it or admin can update
     if (req.user.role === 'teacher' && mark.teacherId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this mark',
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    mark = await Mark.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    }).populate('studentId', 'name admissionNumber grade pathway')
+    const updated = await Mark.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+      .populate('studentId', 'name admissionNumber grade')
       .populate('teacherId', 'name');
 
-    res.status(200).json({
-      success: true,
-      mark,
-    });
-  } catch (error) {
-    next(error);
+    res.json({ success: true, mark: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
  * @desc    Delete mark
  * @route   DELETE /api/marks/:id
- * @access  Private/Admin
+ * @access  Private (Admin)
  */
-exports.deleteMark = async (req, res, next) => {
+const deleteMark = async (req, res) => {
   try {
     const mark = await Mark.findByIdAndDelete(req.params.id);
-
-    if (!mark) {
-      return res.status(404).json({
-        success: false,
-        message: 'Mark not found',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Mark deleted successfully',
-    });
-  } catch (error) {
-    next(error);
+    if (!mark) return res.status(404).json({ success: false, message: 'Mark not found' });
+    res.json({ success: true, message: 'Mark deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
- * @desc    Approve mark (admin only)
+ * @desc    Approve mark
  * @route   PUT /api/marks/:id/approve
- * @access  Private/Admin
+ * @access  Private (Admin)
  */
-exports.approveMark = async (req, res, next) => {
+const approveMark = async (req, res) => {
   try {
-    const mark = await Mark.findByIdAndUpdate(
-      req.params.id,
-      { isApproved: true },
-      { new: true }
-    ).populate('studentId', 'name admissionNumber')
+    const mark = await Mark.findByIdAndUpdate(req.params.id, { isApproved: true }, { new: true })
+      .populate('studentId', 'name')
       .populate('teacherId', 'name');
-
-    if (!mark) {
-      return res.status(404).json({
-        success: false,
-        message: 'Mark not found',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      mark,
-    });
-  } catch (error) {
-    next(error);
+    if (!mark) return res.status(404).json({ success: false, message: 'Mark not found' });
+    res.json({ success: true, mark });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
- * @desc    Get student marks summary
+ * @desc    Reject mark
+ * @route   PUT /api/marks/:id/reject
+ * @access  Private (Admin)
+ */
+const rejectMark = async (req, res) => {
+  try {
+    const mark = await Mark.findByIdAndUpdate(req.params.id, { isApproved: false }, { new: true })
+      .populate('studentId', 'name')
+      .populate('teacherId', 'name');
+    if (!mark) return res.status(404).json({ success: false, message: 'Mark not found' });
+    res.json({ success: true, mark });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * @desc    Get summary for a student
  * @route   GET /api/marks/summary/:studentId
  * @access  Private
  */
-exports.getStudentSummary = async (req, res, next) => {
+const getStudentSummary = async (req, res) => {
   try {
-    // Students can only view their own summary
-    if (req.user.role === 'student' && req.params.studentId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this summary',
-      });
+    const { studentId } = req.params;
+    const { term, year } = req.query;
+
+    if (req.user.role === 'student' && req.user.id !== studentId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { term, year } = req.query;
-    const query = { studentId: req.params.studentId };
+    const query = { studentId };
     if (term) query.term = parseInt(term);
     if (year) query.year = parseInt(year);
 
     const marks = await Mark.find(query).sort({ subject: 1 });
+    const student = await User.findById(studentId).select('name grade pathway');
 
-    // Calculate summary statistics
-    const summary = {};
-    marks.forEach(mark => {
-      const key = `${mark.term}-${mark.year}`;
-      if (!summary[key]) {
-        summary[key] = { term: mark.term, year: mark.year, subjects: [], average: 0 };
-      }
-      summary[key].subjects.push({
-        subject: mark.subject,
-        score: mark.score,
-        competencyLevel: mark.competencyLevel,
-        competencyLabel: mark.competencyLabel,
-        teacherRemark: mark.teacherRemark,
-        assessmentType: mark.assessmentType,
-      });
-    });
+    const totalScore = marks.reduce((sum, m) => sum + m.score, 0);
+    const mean = marks.length > 0 ? (totalScore / marks.length).toFixed(2) : 0;
 
-    // Calculate averages
-    Object.values(summary).forEach(termSummary => {
-      const total = termSummary.subjects.reduce((sum, s) => sum + s.score, 0);
-      termSummary.average = termSummary.subjects.length > 0 ? (total / termSummary.subjects.length).toFixed(1) : 0;
-    });
+    const positions = await calculatePositions(student.grade, parseInt(term), parseInt(year));
+    const position = positions.find(p => p.studentId.toString() === studentId);
 
-    res.status(200).json({
+    res.json({
       success: true,
-      summary: Object.values(summary),
+      data: { student, marks, totalScore, mean, position: position?.position, totalStudents: positions.length },
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
+};
+
+/**
+ * @desc    Get marks with positions for admin/teacher
+ * @route   GET /api/marks/with-positions
+ * @access  Private (Admin/Teacher)
+ */
+const getMarksWithPositions = async (req, res) => {
+  try {
+    const { grade, term, year } = req.query;
+    if (!grade || !term || !year) {
+      return res.status(400).json({ success: false, message: 'Grade, term, and year required' });
+    }
+
+    const positions = await calculatePositions(grade, parseInt(term), parseInt(year));
+    const students = await User.find({ role: 'student', grade }).select('name admissionNumber');
+
+    const result = positions.map(p => {
+      const student = students.find(s => s._id.toString() === p.studentId.toString());
+      return { ...p, admissionNumber: student?.admissionNumber || 'N/A' };
+    });
+
+    res.json({ success: true, count: result.length, positions: result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = {
+  getMarks,
+  createMark,
+  bulkCreateMarks,
+  updateMark,
+  deleteMark,
+  approveMark,
+  rejectMark,
+  getStudentSummary,
+  getMarksWithPositions,
 };

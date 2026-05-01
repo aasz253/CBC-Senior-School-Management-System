@@ -25,9 +25,11 @@ import StudentFees from './pages/student/StudentFees';
 import StudentAssignments from './pages/student/StudentAssignments';
 import StudentAttendance from './pages/student/StudentAttendance';
 import StudentTimetable from './pages/student/StudentTimetable';
+import StudentReportCard from './pages/student/StudentReportCard';
 import WorkerDashboard from './pages/worker/WorkerDashboard';
 import SchoolDetailsPage from './pages/SchoolDetailsPage';
 import AdminSchoolDetails from './pages/admin/AdminSchoolDetails';
+import AdminReports from './pages/admin/AdminReports';
 
 // Shared
 import Navbar from './components/Navbar';
@@ -161,6 +163,11 @@ function App() {
               <StudentTimetable />
             </ProtectedRoute>
           } />
+          <Route path="/student/report" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <StudentReportCard />
+            </ProtectedRoute>
+          } />
 
           {/* School Details - All authenticated users */}
           <Route path="/school" element={
@@ -173,6 +180,13 @@ function App() {
           <Route path="/admin/school" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminSchoolDetails />
+            </ProtectedRoute>
+          } />
+
+          {/* Admin Reports */}
+          <Route path="/admin/reports" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminReports />
             </ProtectedRoute>
           } />
 

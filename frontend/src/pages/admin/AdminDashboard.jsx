@@ -56,17 +56,17 @@ const AdminDashboard = () => {
         attendanceRes,
       ] = await Promise.all([
         api.get('/admin/stats'),
-        api.get('/admin/activity/recent'),
-        api.get('/admin/fees/collection'),
-        api.get('/admin/grades/distribution'),
-        api.get('/admin/attendance/trend'),
+        api.get('/admin/activity/recent').catch(() => ({ data: [] })),
+        api.get('/admin/fees/collection').catch(() => ({ data: [] })),
+        api.get('/admin/grades/distribution').catch(() => ({ data: [] })),
+        api.get('/admin/attendance/trend').catch(() => ({ data: [] })),
       ]);
 
-      setStats(statsRes.data);
-      setRecentActivity(activityRes.data);
-      setFeeCollectionData(feesRes.data);
-      setGradeDistribution(gradesRes.data);
-      setAttendanceData(attendanceRes.data);
+      setStats(statsRes.data.stats || statsRes.data);
+      setRecentActivity(Array.isArray(activityRes.data) ? activityRes.data : []);
+      setFeeCollectionData(Array.isArray(feesRes.data) ? feesRes.data : []);
+      setGradeDistribution(Array.isArray(gradesRes.data) ? gradesRes.data : []);
+      setAttendanceData(Array.isArray(attendanceRes.data) ? attendanceRes.data : []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load dashboard data');
       showError('Failed to load dashboard data');
