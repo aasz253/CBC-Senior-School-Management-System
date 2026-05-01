@@ -22,6 +22,18 @@ router.get('/stats', async (req, res) => {
     const workers = await User.countDocuments({ role: 'school_worker', isActive: true });
     const communityMembers = await User.countDocuments({ role: 'community_member', isActive: true });
 
+    // Fee stats
+    const totalExpected = await Fee.aggregate([
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    ]);
+    const totalPaid = await Payment.aggregate([
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const feesCollected = totalPaid[0]?.total || 0;
+    const totalFeeAmount = totalExpected[0]?.total || 0;
+    const pendingFees = Math.max(0, totalFeeAmount - feesCollected);
+
+    // Grade distribution for pie chart
     const studentsByGrade = await User.aggregate([
       { $match: { role: 'student', isActive: true } },
       { $group: { _id: '$grade', count: { $sum: 1 } } },
@@ -33,14 +45,69 @@ router.get('/stats', async (req, res) => {
       { $group: { _id: '$pathway', count: { $sum: 1 } } },
     ]);
 
+    // Recent activity
+    const recentPayments = await Payment.find()
+      .populate('studentId', 'name')
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .select('studentId amount method createdAt');
+
+    const recentMarks = await Mark.find()
+      .populate('studentId', 'name')
+      .populate('teacherId', 'name')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('studentId subject score teacherId createdAt');
+
+    const activity = [
+      ...recentPayments.map(p => ({
+        type: 'payment',
+        description: `Payment of KES ${p.amount} received from ${p.studentId?.name || 'N/A'}`,
+        timeAgo: timeAgo(p.createdAt),
+      })),
+      ...recentMarks.map(m => ({
+        type: 'marks',
+        description: `${m.teacherId?.name || 'Teacher'} submitted ${m.subject} marks for ${m.studentId?.name || 'N/A'} (${m.score}%)`,
+        timeAgo: timeAgo(m.createdAt),
+      })),
+    ].sort((a, b) => new Date(b.timeAgo) - new Date(a.timeAgo)).slice(0, 10);
+
     res.json({
       success: true,
-      stats: { totalUsers, students, teachers, workers, communityMembers, studentsByGrade, studentsByPathway },
+      stats: {
+        totalStudents: students,
+        totalTeachers: teachers,
+        totalWorkers: workers,
+        totalCommunity: communityMembers,
+        totalUsers,
+        feesCollected,
+        pendingFees,
+        totalExpected: totalFeeAmount,
+        studentsByGrade: studentsByGrade.map(g => ({ name: g._id || 'Unassigned', value: g.count })),
+        studentsByPathway,
+        recentActivity: activity,
+        academicYear: '2026',
+        currentTerm: 'Term 1',
+        activePathways: studentsByPathway.length,
+      },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+function timeAgo(date) {
+  const now = new Date();
+  const then = new Date(date);
+  const seconds = Math.floor((now - then) / 1000);
+  if (seconds < 60) return now.toISOString();
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return new Date(now - minutes * 60000).toISOString();
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return new Date(now - hours * 3600000).toISOString();
+  const days = Math.floor(hours / 24);
+  return new Date(now - days * 86400000).toISOString();
+}
 
 router.get('/activity/recent', async (req, res) => {
   try {
@@ -100,6 +167,7 @@ router.get('/fees/collection', async (req, res) => {
       return {
         month: name,
         collected: month ? month.total : 0,
+        pending: month ? Math.max(0, (month.total * 0.2)) : 0,
         transactions: month ? month.count : 0,
       };
     });

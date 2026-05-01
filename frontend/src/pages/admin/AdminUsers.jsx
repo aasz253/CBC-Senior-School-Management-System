@@ -44,7 +44,7 @@ const AdminUsers = () => {
   const [submitting, setSubmitting] = useState(false);
   const { error: showError, success: showSuccess } = useToast();
 
-  const roles = ['all', 'admin', 'teacher', 'student', 'parent'];
+  const roles = ['all', 'admin', 'teacher', 'student', 'school_worker', 'community_member'];
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -183,11 +183,13 @@ const AdminUsers = () => {
       admin: 'bg-red-100 text-red-800',
       teacher: 'bg-blue-100 text-blue-800',
       student: 'bg-green-100 text-green-800',
-      parent: 'bg-purple-100 text-purple-800',
+      school_worker: 'bg-yellow-100 text-yellow-800',
+      community_member: 'bg-purple-100 text-purple-800',
     };
+    const label = role === 'school_worker' ? 'Worker' : role === 'community_member' ? 'Community' : role?.charAt(0).toUpperCase() + role?.slice(1);
     return (
       <span className={`badge px-2 py-1 rounded-full text-xs font-medium ${styles[role] || 'bg-gray-100 text-gray-800'}`}>
-        {role?.charAt(0).toUpperCase() + role?.slice(1)}
+        {label}
       </span>
     );
   };
@@ -236,7 +238,7 @@ const AdminUsers = () => {
             >
               {roles.map((role) => (
                 <option key={role} value={role}>
-                  {role === 'all' ? 'All Roles' : role.charAt(0).toUpperCase() + role.slice(1)}
+                  {role === 'all' ? 'All Roles' : role === 'school_worker' ? 'Workers' : role === 'community_member' ? 'Community' : role.charAt(0).toUpperCase() + role.slice(1)}
                 </option>
               ))}
             </select>
@@ -451,7 +453,8 @@ const AdminUsers = () => {
                   <option value="admin">Admin</option>
                   <option value="teacher">Teacher</option>
                   <option value="student">Student</option>
-                  <option value="parent">Parent</option>
+                  <option value="school_worker">School Worker</option>
+                  <option value="community_member">Community Member</option>
                 </select>
                 {formErrors.role && <p className="text-sm text-red-500 mt-1">{formErrors.role}</p>}
               </div>

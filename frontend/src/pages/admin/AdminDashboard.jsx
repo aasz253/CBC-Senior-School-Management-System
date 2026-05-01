@@ -25,6 +25,8 @@ import {
   Award,
   Clock,
   ChevronRight,
+  Wrench,
+  Globe,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
@@ -33,7 +35,6 @@ const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]);
   const [feeCollectionData, setFeeCollectionData] = useState([]);
   const [gradeDistribution, setGradeDistribution] = useState([]);
   const [attendanceData, setAttendanceData] = useState([]);
@@ -50,20 +51,17 @@ const AdminDashboard = () => {
       setLoading(true);
       const [
         statsRes,
-        activityRes,
         feesRes,
         gradesRes,
         attendanceRes,
       ] = await Promise.all([
         api.get('/admin/stats'),
-        api.get('/admin/activity/recent').catch(() => ({ data: [] })),
         api.get('/admin/fees/collection').catch(() => ({ data: [] })),
         api.get('/admin/grades/distribution').catch(() => ({ data: [] })),
         api.get('/admin/attendance/trend').catch(() => ({ data: [] })),
       ]);
 
       setStats(statsRes.data.stats || statsRes.data);
-      setRecentActivity(Array.isArray(activityRes.data) ? activityRes.data : []);
       setFeeCollectionData(Array.isArray(feesRes.data) ? feesRes.data : []);
       setGradeDistribution(Array.isArray(gradesRes.data) ? gradesRes.data : []);
       setAttendanceData(Array.isArray(attendanceRes.data) ? attendanceRes.data : []);
@@ -101,28 +99,36 @@ const AdminDashboard = () => {
       value: stats?.totalStudents || 0,
       icon: Users,
       color: 'bg-blue-500',
-      change: stats?.studentChange || 0,
     },
     {
       title: 'Total Teachers',
       value: stats?.totalTeachers || 0,
       icon: GraduationCap,
       color: 'bg-green-500',
-      change: stats?.teacherChange || 0,
+    },
+    {
+      title: 'Workers',
+      value: stats?.totalWorkers || 0,
+      icon: Wrench,
+      color: 'bg-yellow-500',
+    },
+    {
+      title: 'Community',
+      value: stats?.totalCommunity || 0,
+      icon: Globe,
+      color: 'bg-purple-500',
     },
     {
       title: 'Fees Collected',
-      value: `KES ${stats?.feesCollected?.toLocaleString() || 0}`,
+      value: `KES ${(stats?.feesCollected || 0).toLocaleString()}`,
       icon: DollarSign,
       color: 'bg-emerald-500',
-      change: stats?.feesChange || 0,
     },
     {
       title: 'Pending Fees',
-      value: `KES ${stats?.pendingFees?.toLocaleString() || 0}`,
+      value: `KES ${(stats?.pendingFees || 0).toLocaleString()}`,
       icon: AlertCircle,
       color: 'bg-red-500',
-      change: stats?.pendingChange || 0,
     },
   ];
 
@@ -140,20 +146,13 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statCards.map((stat, index) => (
           <div key={index} className="card p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className={`w-4 h-4 ${stat.change >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-                  <span className={`text-sm ml-1 ${stat.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {stat.change >= 0 ? '+' : ''}{stat.change}%
-                  </span>
-                  <span className="text-sm text-gray-500 ml-1">vs last term</span>
-                </div>
               </div>
               <div className={`${stat.color} p-3 rounded-xl`}>
                 <stat.icon className="w-6 h-6 text-white" />
@@ -228,23 +227,21 @@ const AdminDashboard = () => {
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
           <div className="space-y-4">
-            {recentActivity.length === 0 ? (
+            {stats?.recentActivity?.length === 0 || !stats?.recentActivity ? (
               <p className="text-gray-500 text-center py-4">No recent activity</p>
             ) : (
-              recentActivity.slice(0, 8).map((activity, index) => (
+              stats.recentActivity.slice(0, 8).map((activity, index) => (
                 <div key={index} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
                   <div className="bg-primary-50 p-2 rounded-lg mt-1">
                     {activity.type === 'payment' && <DollarSign className="w-4 h-4 text-blue-600" />}
-                    {activity.type === 'enrollment' && <Users className="w-4 h-4 text-green-600" />}
                     {activity.type === 'marks' && <Award className="w-4 h-4 text-purple-600" />}
-                    {activity.type === 'news' && <BookOpen className="w-4 h-4 text-orange-600" />}
-                    {!['payment', 'enrollment', 'marks', 'news'].includes(activity.type) && (
+                    {!['payment', 'marks'].includes(activity.type) && (
                       <Clock className="w-4 h-4 text-gray-600" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900 truncate">{activity.description}</p>
-                    <p className="text-xs text-gray-500 mt-1">{activity.timeAgo}</p>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(activity.timeAgo).toLocaleString()}</p>
                   </div>
                 </div>
               ))
