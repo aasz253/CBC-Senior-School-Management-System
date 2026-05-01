@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, FileText, Upload, X, Loader, Edit, Trash2, CheckCircle, Clock } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+
+const ALL_SUBJECTS = [
+  'Mathematics', 'English', 'Kiswahili', 'Biology', 'Chemistry', 'Physics',
+  'History', 'Geography', 'CRE', 'Business Studies', 'Agriculture',
+  'Computer Studies', 'Music', 'Physical Education', 'Art & Design',
+  'French', 'German', 'Home Science',
+];
 
 const TeacherAssignments = () => {
   const { user } = useAuth();
@@ -20,8 +27,12 @@ const TeacherAssignments = () => {
     dueDate: '',
     maxScore: 100,
   });
+  const [pdfFile, setPdfFile] = useState(null);
   const [gradeData, setGradeData] = useState({ grade: '', feedback: '' });
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const availableSubjects = (user?.assignedSubjects || []).length > 0 ? user.assignedSubjects : ALL_SUBJECTS;
 
   useEffect(() => { fetchAssignments(); }, []);
 
@@ -39,9 +50,20 @@ const TeacherAssignments = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/assignments', formData);
+      const submitData = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value) submitData.append(key, value);
+      });
+      if (pdfFile) {
+        submitData.append('attachments', pdfFile);
+      }
+      await api.post('/assignments', submitData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       showSuccess('Assignment created');
       setShowModal(false);
+      setPdfFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setFormData({
         title: '',
         description: '',
@@ -121,6 +143,9 @@ const TeacherAssignments = () => {
                   <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                     <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> Due: {new Date(a.dueDate).toLocaleDateString('en-KE')}</span>
                     <span className="flex items-center gap-1"><FileText className="w-4 h-4" /> Max: {a.maxScore} pts</span>
+                    {a.attachments?.length > 0 && (
+                      <a href={a.attachments[0].filePath} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary-600 hover:underline"><FileText className="w-4 h-4" /> PDF</a>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -142,15 +167,37 @@ const TeacherAssignments = () => {
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div><label className="label">Title</label><input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="input" required /></div>
-              <div><label className="label">Description</label><textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input" rows={3} required /></div>
+              <div><label className="label">Title</label><input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="input" required placeholder="Assignment title" /></div>
+              <div><label className="label">Description</label><textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input" rows={3} required placeholder="Assignment instructions..." /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Subject</label><select value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} className="input">{(user?.assignedSubjects || []).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                <div><label className="label">Grade</label><select value={formData.grade} onChange={(e) => setFormData({ ...formData, grade: e.target.value })} className="input"><option value="">Select Grade</option>{['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)}</select></div>
+                <div>
+                  <label className="label">Subject</label>
+                  <select value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} className="input" required>
+                    <option value="">Select Subject</option>
+                    {availableSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Grade</label>
+                  <select value={formData.grade} onChange={(e) => setFormData({ ...formData, grade: e.target.value })} className="input" required>
+                    <option value="">Select Grade</option>
+                    {['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">Due Date</label><input type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} className="input" required /></div>
-                <div><label className="label">Max Score</label><input type="number" value={formData.maxScore} onChange={(e) => setFormData({ ...formData, maxScore: e.target.value })} className="input" min="1" max="100" /></div>
+                <div><label className="label">Max Score</label><input type="number" value={formData.maxScore} onChange={(e) => setFormData({ ...formData, maxScore: parseInt(e.target.value) })} className="input" min="1" max="100" /></div>
+              </div>
+              <div>
+                <label className="label">Attachment (PDF)</label>
+                <div className="flex items-center gap-2">
+                  <input ref={fileInputRef} type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files[0])} className="input text-sm py-1.5" />
+                  {pdfFile && (
+                    <button type="button" onClick={() => { setPdfFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="p-1 text-red-500 hover:bg-red-50 rounded"><X className="w-4 h-4" /></button>
+                  )}
+                </div>
+                {pdfFile && <p className="text-xs text-gray-500 mt-1">{pdfFile.name}</p>}
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="btn flex-1">Cancel</button>
@@ -182,6 +229,7 @@ const TeacherAssignments = () => {
                       {sub.isGraded ? <span className="badge badge-green flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Graded: {sub.grade}</span> : <span className="badge badge-yellow">Pending</span>}
                     </div>
                   </div>
+                  {sub.textContent && <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mb-2">{sub.textContent}</p>}
                   <p className="text-xs text-gray-500 mb-2">Submitted: {new Date(sub.submittedAt).toLocaleString('en-KE')}</p>
                   {!sub.isGraded && (
                     <div className="flex gap-2 mt-2">

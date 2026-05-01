@@ -63,6 +63,7 @@ const sendTokenResponse = (user, statusCode, res) => {
         pathway: user.pathway,
         assignedClass: user.assignedClass,
         assignedSubjects: user.assignedSubjects,
+        classTeacherOf: user.classTeacherOf,
         language: user.language,
       },
     });
@@ -75,7 +76,7 @@ const sendTokenResponse = (user, statusCode, res) => {
  */
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, phone, password, role, admissionNumber, grade, pathway, parentPhone, guardianName, assignedClass, assignedSubjects } = req.body;
+    const { name, email, phone, password, role, admissionNumber, grade, pathway, parentPhone, guardianName, assignedClass, assignedSubjects, classTeacherOf } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -192,6 +193,7 @@ exports.getMe = async (req, res, next) => {
         pathway: user.pathway,
         assignedClass: user.assignedClass,
         assignedSubjects: user.assignedSubjects,
+        classTeacherOf: user.classTeacherOf,
         parentPhone: user.parentPhone,
         guardianName: user.guardianName,
         language: user.language,

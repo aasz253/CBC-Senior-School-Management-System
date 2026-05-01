@@ -22,13 +22,12 @@ const attendanceSchema = new mongoose.Schema({
   },
   grade: {
     type: String,
-    enum: ['10', '11', '12'],
+    enum: ['7', '8', '9', '10', '11', '12'],
     required: [true, 'Grade is required'],
     index: true,
   },
   assignedClass: {
-    type: String, // e.g., "Grade 10A"
-    required: [true, 'Class is required'],
+    type: String,
   },
   // Optional: subject-specific attendance
   subject: {

@@ -112,6 +112,15 @@ exports.createAssignment = async (req, res, next) => {
   try {
     req.body.teacherId = req.user.id;
 
+    // Handle fields from FormData (multer parses them as strings)
+    if (req.body.dueDate) req.body.dueDate = new Date(req.body.dueDate);
+    if (req.body.maxScore) req.body.maxScore = parseInt(req.body.maxScore);
+
+    // Auto-set assignedClass from grade if not provided
+    if (!req.body.assignedClass && req.body.grade) {
+      req.body.assignedClass = `Grade ${req.body.grade}`;
+    }
+
     const assignment = await Assignment.create(req.body);
 
     // Handle file attachments if uploaded

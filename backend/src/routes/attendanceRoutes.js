@@ -6,12 +6,16 @@ const {
   bulkMarkAttendance,
   updateAttendance,
   getAttendanceStats,
+  getWeeklyAttendance,
+  generateWeeklyPTFReport,
 } = require('../controllers/attendanceController');
 const { protect, authorize } = require('../middleware/auth');
 
 router.use(protect);
 
 router.get('/stats', getAttendanceStats);
+router.get('/weekly', getWeeklyAttendance);
+router.get('/weekly-report', generateWeeklyPTFReport);
 router.get('/', getAttendance);
 router.post('/', authorize('admin', 'teacher'), markAttendance);
 router.post('/bulk', authorize('admin', 'teacher'), bulkMarkAttendance);
