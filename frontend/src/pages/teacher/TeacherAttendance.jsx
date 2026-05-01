@@ -9,17 +9,23 @@ function getMonday(date) {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().split('T')[0];
+  return d;
 }
 
-function getWeekDays(monday) {
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekDays(mondayDate) {
   const days = [];
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   for (let i = 0; i < 5; i++) {
-    const d = new Date(monday);
+    const d = new Date(mondayDate);
     d.setDate(d.getDate() + i);
-    days.push({ date: d.toISOString().split('T')[0], label: dayNames[i] });
+    days.push({ date: formatDate(d), label: dayNames[i], fullDate: `${dayNames[i]} ${formatDate(d)}` });
   }
   return days;
 }
@@ -62,7 +68,7 @@ const TeacherAttendance = () => {
 
   const fetchExistingAttendance = async () => {
     try {
-      const startDate = weekMonday;
+      const startDate = formatDate(weekMonday);
       const endDate = weekDays[4].date;
       const res = await api.get(`/attendance?startDate=${startDate}&endDate=${endDate}&grade=${selectedGrade}`);
       const existing = {};
@@ -108,13 +114,13 @@ const TeacherAttendance = () => {
   const handleGeneratePTF = async () => {
     setGeneratingPDF(true);
     try {
-      const res = await api.get(`/attendance/weekly-report?weekStart=${weekMonday}&grade=${selectedGrade}`, {
+      const res = await api.get(`/attendance/weekly-report?weekStart=${formatDate(weekMonday)}&grade=${selectedGrade}`, {
         responseType: 'blob',
       });
       const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `PTF_Attendance_Grade_${selectedGrade}_WeekOf_${weekMonday}.pdf`);
+      link.setAttribute('download', `PTF_Attendance_Grade_${selectedGrade}_WeekOf_${formatDate(weekMonday)}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -127,7 +133,8 @@ const TeacherAttendance = () => {
   const navigateWeek = (direction) => {
     const d = new Date(weekMonday);
     d.setDate(d.getDate() + (direction * 7));
-    setWeekMonday(d.toISOString().split('T')[0]);
+    setWeekMonday(d);
+    setAttendance({});
   };
 
   const stats = { present: 0, absent: 0, late: 0, notMarked: 0 };
@@ -141,7 +148,7 @@ const TeacherAttendance = () => {
     });
   });
 
-  const weekLabel = `${weekDays[0].label} ${weekDays[0].date} - ${weekDays[4].label} ${weekDays[4].date}`;
+  const weekLabel = `${weekDays[0].fullDate} — ${weekDays[4].fullDate}`;
 
   if (loading) return <div className="min-h-[60vh] flex items-center justify-center"><Loader className="w-8 h-8 animate-spin text-gray-400" /></div>;
 
@@ -169,7 +176,7 @@ const TeacherAttendance = () => {
             <Calendar className="w-5 h-5 text-gray-400" />
             <span className="text-sm font-medium">{weekLabel}</span>
             <button onClick={() => navigateWeek(1)} className="p-1 hover:bg-gray-100 rounded"><ChevronRight className="w-5 h-5" /></button>
-            <button onClick={() => setWeekMonday(getMonday(new Date()))} className="text-xs text-green-600 hover:underline ml-2">Today</button>
+            <button onClick={() => { setWeekMonday(getMonday(new Date())); setAttendance({}); }} className="text-xs text-green-600 hover:underline ml-2">Today</button>
           </div>
           <select value={selectedGrade} onChange={(e) => { setSelectedGrade(e.target.value); setAttendance({}); }} className="input w-48">
             <option value="">Select Grade</option>
@@ -213,7 +220,7 @@ const TeacherAttendance = () => {
                 </tr>
               </thead>
               <tbody>
-                {students.map(student => {
+                  {students.map(student => {
                   let p = 0, a = 0, l = 0;
                   weekDays.forEach(day => {
                     const st = getStatus(student._id, day.date);
@@ -226,6 +233,11 @@ const TeacherAttendance = () => {
                       <td className="table-cell">
                         <p className="font-medium text-gray-900">{student.name}</p>
                         <p className="text-xs text-gray-500">{student.admissionNumber}</p>
+                        <div className="flex gap-2 mt-1 text-xs font-medium">
+                          <span className="text-green-600">P:{p}</span>
+                          <span className="text-red-600">A:{a}</span>
+                          <span className="text-yellow-600">L:{l}</span>
+                        </div>
                       </td>
                       {weekDays.map(day => {
                         const st = getStatus(student._id, day.date);
