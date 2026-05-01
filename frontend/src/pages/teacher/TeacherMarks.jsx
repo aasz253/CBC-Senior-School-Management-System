@@ -4,6 +4,13 @@ import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
+const CBC_SUBJECTS = [
+  'Mathematics', 'English', 'Kiswahili', 'Biology', 'Chemistry', 'Physics',
+  'History & Government', 'Geography', 'CRE/IRE', 'Agriculture',
+  'Business Studies', 'Computer Studies', 'Home Science', 'Art & Design',
+  'Music', 'Physical Education', 'French', 'German',
+];
+
 const TeacherMarks = () => {
   const { user } = useAuth();
   const { success: showSuccess, error: showError } = useToast();
@@ -20,11 +27,13 @@ const TeacherMarks = () => {
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
 
+  const subjects = user?.assignedSubjects?.length > 0
+    ? user.assignedSubjects
+    : CBC_SUBJECTS;
+
   useEffect(() => {
     if (filters.grade && filters.term && filters.subject) {
       fetchStudentsAndMarks();
-    } else if (user?.classTeacherOf && !filters.grade) {
-      setFilters(f => ({ ...f, grade: user.classTeacherOf }));
     }
   }, [filters.grade, filters.term, filters.subject]);
 
@@ -32,7 +41,7 @@ const TeacherMarks = () => {
     try {
       setLoading(true);
       const [studentsRes, marksRes] = await Promise.all([
-        api.get(`/users?role=student&grade=${filters.grade}`),
+        api.get(`/users/students?grade=${filters.grade}`),
         api.get(`/marks?grade=${filters.grade}&term=${filters.term}&year=${filters.year}&subject=${filters.subject}`),
       ]);
       setStudents(studentsRes.data.users || []);
@@ -143,12 +152,12 @@ const TeacherMarks = () => {
             {user?.classTeacherOf ? (
               <option value={user.classTeacherOf}>Grade {user.classTeacherOf} (My Class)</option>
             ) : (
-              ['10', '11', '12'].map(g => <option key={g} value={g}>Grade {g}</option>)
+              ['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)
             )}
           </select>
           <select value={filters.subject} onChange={(e) => setFilters({ ...filters, subject: e.target.value })} className="input py-2">
             <option value="">Select Subject</option>
-            {(user?.assignedSubjects || []).map(s => <option key={s} value={s}>{s}</option>)}
+            {subjects.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={filters.term} onChange={(e) => setFilters({ ...filters, term: e.target.value })} className="input py-2">
             <option value="">Select Term</option>
@@ -169,7 +178,7 @@ const TeacherMarks = () => {
       {loading ? (
         <div className="flex justify-center py-12"><Loader className="w-8 h-8 animate-spin text-gray-400" /></div>
       ) : !filters.subject || !filters.term ? (
-        <div className="card text-center py-12"><p className="text-gray-500">Please select grade, subject and term to view marks</p></div>
+        <div className="card text-center py-12"><p className="text-gray-500">Please select grade, subject and term to enter marks</p></div>
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
