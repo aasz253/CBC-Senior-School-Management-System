@@ -30,7 +30,12 @@ app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -87,6 +92,10 @@ app.use('/api/attendance', require('./src/routes/attendanceRoutes'));
 app.use('/api/timetable', require('./src/routes/timetableRoutes'));
 app.use('/api/news', require('./src/routes/newsRoutes'));
 app.use('/api/reports', require('./src/routes/reportRoutes'));
+app.use('/api/school', require('./src/routes/schoolDetailsRoutes'));
+
+// Admin stats alias (dashboard calls /admin/stats)
+app.use('/api/admin', require('./src/routes/adminRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {

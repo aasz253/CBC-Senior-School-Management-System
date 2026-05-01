@@ -26,6 +26,8 @@ import StudentAssignments from './pages/student/StudentAssignments';
 import StudentAttendance from './pages/student/StudentAttendance';
 import StudentTimetable from './pages/student/StudentTimetable';
 import WorkerDashboard from './pages/worker/WorkerDashboard';
+import SchoolDetailsPage from './pages/SchoolDetailsPage';
+import AdminSchoolDetails from './pages/admin/AdminSchoolDetails';
 
 // Shared
 import Navbar from './components/Navbar';
@@ -157,6 +159,20 @@ function App() {
           <Route path="/student/timetable" element={
             <ProtectedRoute allowedRoles={['student']}>
               <StudentTimetable />
+            </ProtectedRoute>
+          } />
+
+          {/* School Details - All authenticated users */}
+          <Route path="/school" element={
+            <ProtectedRoute>
+              <SchoolDetailsPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Admin School Details Management */}
+          <Route path="/admin/school" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminSchoolDetails />
             </ProtectedRoute>
           } />
 

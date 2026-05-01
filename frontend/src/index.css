@@ -15,6 +15,9 @@
   .btn-primary {
     @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
+  .btn-accent {
+    @apply bg-accent-500 text-white hover:bg-accent-600 focus:ring-accent-500;
+  }
   .btn-secondary {
     @apply bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400;
   }
@@ -22,7 +25,7 @@
     @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
   .btn-success {
-    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+    @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;

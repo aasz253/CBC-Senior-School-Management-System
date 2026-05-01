@@ -39,7 +39,15 @@ const RegisterPage = () => {
     }
     setLoading(true);
     try {
-      const { confirmPassword, ...userData } = formData;
+      const { confirmPassword, grade, pathway, admissionNumber, parentPhone, guardianName, ...rest } = formData;
+      const userData = {
+        ...rest,
+        ...(admissionNumber && { admissionNumber }),
+        ...(grade && { grade }),
+        ...(pathway && { pathway }),
+        ...(parentPhone && { parentPhone }),
+        ...(guardianName && { guardianName }),
+      };
       await register(userData);
       showSuccess('Registration successful!');
       navigate(`/${userData.role}`);

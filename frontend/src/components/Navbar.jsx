@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Menu, X, Home, Users, DollarSign, BarChart3, BookOpen,
   Calendar, FileText, Settings, LogOut, Bell, GraduationCap,
-  ClipboardList, Clock, Newspaper, User, ChevronDown
+  ClipboardList, Clock, Newspaper, User, ChevronDown, School
 } from 'lucide-react';
 
 const Navbar = () => {
@@ -39,7 +39,8 @@ const Navbar = () => {
     { path: '/admin/marks', label: 'Marks', icon: BarChart3 },
     { path: '/admin/payments', label: 'Payments', icon: DollarSign },
     { path: '/admin/news', label: 'News', icon: Newspaper },
-    { path: '/admin/settings', label: 'Settings', icon: Settings },
+    { path: '/school', label: 'School', icon: School },
+    { path: '/admin/school', label: 'Manage School', icon: Settings },
   ];
 
   // Teacher nav items
@@ -49,6 +50,7 @@ const Navbar = () => {
     { path: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
     { path: '/teacher/attendance', label: 'Attendance', icon: ClipboardList },
     { path: '/teacher/timetable', label: 'Timetable', icon: Clock },
+    { path: '/school', label: 'School', icon: School },
   ];
 
   // Student nav items
@@ -59,11 +61,13 @@ const Navbar = () => {
     { path: '/student/assignments', label: 'Assignments', icon: BookOpen },
     { path: '/student/attendance', label: 'Attendance', icon: ClipboardList },
     { path: '/student/timetable', label: 'Timetable', icon: Clock },
+    { path: '/school', label: 'School', icon: School },
   ];
 
   // Worker nav items
   const workerNav = [
     { path: '/worker', label: 'Dashboard', icon: Home },
+    { path: '/school', label: 'School', icon: School },
   ];
 
   const getNavItems = () => {

@@ -4,11 +4,11 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true,
+  timeout: 30000,
 });
 
 // Request interceptor - add auth token
@@ -35,11 +35,7 @@ api.interceptors.response.use(
 
       try {
         // Try to refresh token
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
+        const response = await axios.post('/api/auth/refresh', {});
 
         const { token } = response.data;
         localStorage.setItem('token', token);
