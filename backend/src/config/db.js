@@ -7,16 +7,14 @@ const mongoose = require('mongoose');
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      // These options are default in Mongoose 6+ but explicit for clarity
-      autoIndex: true,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-
-    // Create indexes for performance after connection
     await createIndexes();
   } catch (error) {
     console.error(`Database Connection Error: ${error.message}`);
-    process.exit(1);
+    console.log('Server will start without database connection');
   }
 };
 
