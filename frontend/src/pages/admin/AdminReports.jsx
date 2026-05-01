@@ -98,9 +98,7 @@ const AdminReports = () => {
           <div>
             <label className="label">Grade</label>
             <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)} className="input">
-              <option value="10">Grade 10</option>
-              <option value="11">Grade 11</option>
-              <option value="12">Grade 12</option>
+              {['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)}
             </select>
           </div>
           <div>

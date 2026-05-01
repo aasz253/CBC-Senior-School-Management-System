@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema({
   assignedSubjects: [{
     type: String,
   }],
+  // Class teacher assignment - the grade this teacher is class teacher for
+  classTeacherOf: {
+    type: String, // e.g., "10", "11", "12"
+  },
 
   // Password reset
   resetPasswordToken: String,

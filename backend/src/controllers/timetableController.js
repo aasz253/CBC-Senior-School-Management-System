@@ -17,7 +17,8 @@ exports.getTimetable = async (req, res, next) => {
 
     // Role-based filtering
     if (req.user.role === 'student') {
-      query.grade = req.user.grade;
+      const gradeVal = req.user.grade?.toString().replace('Grade ', '') || req.user.grade;
+      query.grade = gradeVal;
       if (req.user.assignedClass) {
         query.assignedClass = req.user.assignedClass;
       }

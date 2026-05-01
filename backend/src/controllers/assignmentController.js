@@ -21,7 +21,8 @@ exports.getAssignments = async (req, res, next) => {
     if (req.user.role === 'teacher') {
       query.teacherId = req.user.id;
     } else if (req.user.role === 'student') {
-      query.grade = req.user.grade;
+      const gradeVal = req.user.grade?.toString().replace('Grade ', '') || req.user.grade;
+      query.grade = gradeVal;
     }
 
     if (grade) query.grade = grade;

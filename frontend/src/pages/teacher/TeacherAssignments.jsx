@@ -12,7 +12,14 @@ const TeacherAssignments = () => {
   const [showModal, setShowModal] = useState(false);
   const [showSubmissions, setShowSubmissions] = useState(null);
   const [submissions, setSubmissions] = useState([]);
-  const [formData, setFormData] = useState({ title: '', description: '', subject: user?.assignedSubjects?.[0] || '', grade: user?.grade || '', assignedClass: user?.assignedClass || '', dueDate: '', maxScore: 100 });
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    subject: user?.assignedSubjects?.[0] || '',
+    grade: user?.classTeacherOf || '',
+    dueDate: '',
+    maxScore: 100,
+  });
   const [gradeData, setGradeData] = useState({ grade: '', feedback: '' });
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,6 +42,14 @@ const TeacherAssignments = () => {
       await api.post('/assignments', formData);
       showSuccess('Assignment created');
       setShowModal(false);
+      setFormData({
+        title: '',
+        description: '',
+        subject: user?.assignedSubjects?.[0] || '',
+        grade: user?.classTeacherOf || '',
+        dueDate: '',
+        maxScore: 100,
+      });
       fetchAssignments();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to create assignment');
@@ -82,7 +97,7 @@ const TeacherAssignments = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Assignments</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Assignments</h1>
           <p className="text-gray-600 mt-1">Create and manage assignments</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary text-sm flex items-center gap-1"><Plus className="w-4 h-4" /> New Assignment</button>
@@ -131,9 +146,12 @@ const TeacherAssignments = () => {
               <div><label className="label">Description</label><textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input" rows={3} required /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">Subject</label><select value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} className="input">{(user?.assignedSubjects || []).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                <div><label className="label">Due Date</label><input type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} className="input" required /></div>
+                <div><label className="label">Grade</label><select value={formData.grade} onChange={(e) => setFormData({ ...formData, grade: e.target.value })} className="input"><option value="">Select Grade</option>{['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)}</select></div>
               </div>
-              <div><label className="label">Max Score</label><input type="number" value={formData.maxScore} onChange={(e) => setFormData({ ...formData, maxScore: e.target.value })} className="input" min="1" max="100" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">Due Date</label><input type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} className="input" required /></div>
+                <div><label className="label">Max Score</label><input type="number" value={formData.maxScore} onChange={(e) => setFormData({ ...formData, maxScore: e.target.value })} className="input" min="1" max="100" /></div>
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="btn flex-1">Cancel</button>
                 <button type="submit" disabled={submitting} className="btn btn-primary flex-1">{submitting ? <span className="flex items-center justify-center"><Loader className="w-4 h-4 animate-spin mr-2" />Creating...</span> : 'Create'}</button>

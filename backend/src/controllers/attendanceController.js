@@ -19,8 +19,9 @@ exports.getAttendance = async (req, res, next) => {
     if (req.user.role === 'student') {
       query.studentId = req.user.id;
     } else if (req.user.role === 'teacher') {
-      // Teachers can see attendance for their assigned class
-      if (req.user.assignedClass) {
+      if (req.user.classTeacherOf) {
+        query.grade = req.user.classTeacherOf;
+      } else if (req.user.assignedClass) {
         query.assignedClass = req.user.assignedClass;
       }
     }
@@ -103,7 +104,7 @@ exports.markAttendance = async (req, res, next) => {
  */
 exports.bulkMarkAttendance = async (req, res, next) => {
   try {
-    const { date, assignedClass, records } = req.body;
+    const { date, grade, assignedClass, records } = req.body;
 
     if (!records || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({
@@ -112,15 +113,20 @@ exports.bulkMarkAttendance = async (req, res, next) => {
       });
     }
 
-    const attendanceRecords = records.map(record => ({
-      studentId: record.studentId,
-      date: record.date || date,
-      status: record.status,
-      assignedClass,
-      recordedBy: req.user.id,
-      reason: record.reason,
-      lateArrivalTime: record.lateArrivalTime,
-    }));
+    const attendanceRecords = [];
+    for (const record of records) {
+      const student = await User.findById(record.studentId);
+      attendanceRecords.push({
+        studentId: record.studentId,
+        date: record.date || date,
+        status: record.status,
+        grade: grade || (student?.grade?.toString().replace('Grade ', '') || student?.grade),
+        assignedClass: assignedClass || student?.assignedClass,
+        recordedBy: req.user.id,
+        reason: record.reason,
+        lateArrivalTime: record.lateArrivalTime,
+      });
+    }
 
     // Use bulkWrite for efficiency with upsert
     const operations = attendanceRecords.map(record => ({

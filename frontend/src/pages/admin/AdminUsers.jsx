@@ -39,6 +39,8 @@ const AdminUsers = () => {
     admissionNumber: '',
     grade: '',
     pathway: '',
+    assignedSubjects: [],
+    classTeacherOf: '',
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -91,6 +93,8 @@ const AdminUsers = () => {
       admissionNumber: '',
       grade: '',
       pathway: '',
+      assignedSubjects: [],
+      classTeacherOf: '',
     });
     setFormErrors({});
     setShowModal(true);
@@ -98,6 +102,7 @@ const AdminUsers = () => {
 
   const openEditModal = (user) => {
     setSelectedUser(user);
+    const normalizedGrade = user.grade?.replace('Grade ', '') || '';
     setFormData({
       name: user.name || '',
       email: user.email || '',
@@ -105,8 +110,10 @@ const AdminUsers = () => {
       role: user.role || 'student',
       phone: user.phone || '',
       admissionNumber: user.admissionNumber || '',
-      grade: user.grade || '',
+      grade: normalizedGrade,
       pathway: user.pathway || '',
+      assignedSubjects: user.assignedSubjects || [],
+      classTeacherOf: user.classTeacherOf || '',
     });
     setFormErrors({});
     setShowModal(true);
@@ -129,6 +136,18 @@ const AdminUsers = () => {
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const toggleSubject = (subject) => {
+    setFormData(prev => {
+      const subjects = prev.assignedSubjects || [];
+      return {
+        ...prev,
+        assignedSubjects: subjects.includes(subject)
+          ? subjects.filter(s => s !== subject)
+          : [...subjects, subject],
+      };
+    });
   };
 
   const validateForm = () => {
@@ -268,19 +287,20 @@ const AdminUsers = () => {
                 <th className="table-header text-left">Role</th>
                 <th className="table-header text-left">Phone</th>
                 <th className="table-header text-left">Admission No.</th>
+                <th className="table-header text-left">Details</th>
                 <th className="table-header text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="table-cell text-center py-12">
+                  <td colSpan="7" className="table-cell text-center py-12">
                     <Loader className="w-6 h-6 animate-spin mx-auto text-gray-400" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="table-cell text-center py-12 text-gray-500">
+                  <td colSpan="7" className="table-cell text-center py-12 text-gray-500">
                     <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p>No users found</p>
                   </td>
@@ -302,6 +322,27 @@ const AdminUsers = () => {
                     <td className="table-cell">{getRoleBadge(user.role)}</td>
                     <td className="table-cell text-gray-600">{user.phone || '-'}</td>
                     <td className="table-cell text-gray-600">{user.admissionNumber || '-'}</td>
+                    <td className="table-cell">
+                      {user.role === 'teacher' ? (
+                        <div className="space-y-1">
+                          {(user.assignedSubjects || []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {user.assignedSubjects.slice(0, 2).map(s => (
+                                <span key={s} className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">{s}</span>
+                              ))}
+                              {user.assignedSubjects.length > 2 && (
+                                <span className="text-xs text-gray-400">+{user.assignedSubjects.length - 2}</span>
+                              )}
+                            </div>
+                          ) : <span className="text-xs text-gray-400">No subjects</span>}
+                          {user.classTeacherOf && (
+                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded block w-fit">CT: Grade {user.classTeacherOf}</span>
+                          )}
+                        </div>
+                      ) : user.role === 'student' ? (
+                        <span className="text-xs text-gray-500">{user.grade ? `Grade ${user.grade}` : '-'} {user.pathway ? `(${user.pathway})` : ''}</span>
+                      ) : <span className="text-gray-400">-</span>}
+                    </td>
                     <td className="table-cell">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -381,7 +422,7 @@ const AdminUsers = () => {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">
                 {selectedUser ? 'Edit User' : 'Add New User'}
@@ -459,6 +500,50 @@ const AdminUsers = () => {
                 {formErrors.role && <p className="text-sm text-red-500 mt-1">{formErrors.role}</p>}
               </div>
 
+              {formData.role === 'teacher' && (
+                <>
+                  <div>
+                    <label className="label">Assigned Subjects</label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      {[
+                        'Mathematics', 'English', 'Kiswahili', 'Biology', 'Chemistry', 'Physics',
+                        'History', 'Geography', 'CRE', 'Business Studies', 'Agriculture',
+                        'Computer Studies', 'Music', 'Physical Education', 'Art & Design',
+                        'French', 'German', 'Home Science',
+                      ].map(subject => (
+                        <label key={subject} className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={(formData.assignedSubjects || []).includes(subject)}
+                            onChange={() => toggleSubject(subject)}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                          />
+                          <span className="text-sm text-gray-700">{subject}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {(formData.assignedSubjects || []).length > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">{formData.assignedSubjects.length} subject(s) selected</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Class Teacher Of</label>
+                    <select
+                      name="classTeacherOf"
+                      value={formData.classTeacherOf}
+                      onChange={handleInputChange}
+                      className="input"
+                    >
+                      <option value="">Not a class teacher</option>
+                      {['7', '8', '9', '10', '11', '12'].map(g => (
+                        <option key={g} value={g}>Grade {g}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">Assign as class teacher for a specific grade</p>
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="label">Phone Number</label>
                 <input
@@ -493,8 +578,7 @@ const AdminUsers = () => {
                       className="input"
                     >
                       <option value="">Select Grade</option>
-                      {['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
-                        'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map((g) => (
+                      {['7','8','9','10','11','12'].map((g) => (
                         <option key={g} value={g}>{g}</option>
                       ))}
                     </select>

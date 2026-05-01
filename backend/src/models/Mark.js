@@ -50,7 +50,6 @@ const markSchema = new mongoose.Schema({
   competencyLevel: {
     type: String,
     enum: ['B', 'A', 'M', 'E'], // Beginning, Approaching, Meeting, Exceeding
-    required: [true, 'Competency level is required'],
   },
   competencyLabel: {
     type: String,

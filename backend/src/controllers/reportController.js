@@ -14,11 +14,12 @@ const SchoolDetails = require('../models/SchoolDetails');
  * Calculate positions for all students in a class
  */
 const calculatePositions = async (grade, term, year) => {
-  const students = await User.find({ role: 'student', grade }).select('_id name');
+  const gradeValue = grade?.toString().replace('Grade ', '') || grade;
+  const students = await User.find({ role: 'student', grade: gradeValue }).select('_id name');
   const positions = [];
 
   for (const student of students) {
-    const marks = await Mark.find({ studentId: student._id, grade, term, year });
+    const marks = await Mark.find({ studentId: student._id, grade: gradeValue, term, year });
     if (marks.length === 0) continue;
 
     const totalScore = marks.reduce((sum, m) => sum + m.score, 0);
@@ -83,7 +84,8 @@ const generateStudentReport = async (req, res, next) => {
     }
 
     const school = await SchoolDetails.findOne();
-    const marks = await Mark.find({ studentId, grade: student.grade, term: parseInt(term), year: parseInt(year) })
+    const gradeValue = student.grade?.toString().replace('Grade ', '') || '';
+    const marks = await Mark.find({ studentId, grade: gradeValue, term: parseInt(term), year: parseInt(year) })
       .sort({ subject: 1 });
 
     if (marks.length === 0) {
@@ -93,13 +95,13 @@ const generateStudentReport = async (req, res, next) => {
     // Pre-calculate subject positions
     const subjectPositions = {};
     for (const mark of marks) {
-      const subjectMarks = await Mark.find({ grade: student.grade, term: parseInt(term), year: parseInt(year), subject: mark.subject });
+      const subjectMarks = await Mark.find({ grade: gradeValue, term: parseInt(term), year: parseInt(year), subject: mark.subject });
       subjectMarks.sort((a, b) => b.score - a.score);
       const pos = subjectMarks.findIndex(m => m.studentId.toString() === studentId) + 1;
       subjectPositions[mark.subject] = { position: pos, total: subjectMarks.length };
     }
 
-    const positions = await calculatePositions(student.grade, parseInt(term), parseInt(year));
+    const positions = await calculatePositions(gradeValue, parseInt(term), parseInt(year));
     const studentPosition = positions.find(p => p.studentId.toString() === studentId);
     const totalStudents = positions.length;
 
@@ -111,7 +113,7 @@ const generateStudentReport = async (req, res, next) => {
     const fee = await Fee.findOne({ studentId, term: parseInt(term), year: parseInt(year) });
 
     // Find class teacher (first teacher assigned to this grade)
-    const classTeacher = await User.findOne({ role: 'teacher', grade: student.grade }).select('name');
+    const classTeacher = await User.findOne({ role: 'teacher', grade: gradeValue }).select('name');
 
     // Create PDF
     const doc = new PDFDocument({ margin: 40 });
@@ -329,10 +331,11 @@ const getStudentReportData = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    const marks = await Mark.find({ studentId, grade: student.grade, term: parseInt(term), year: parseInt(year) })
+    const gradeValue = student.grade?.toString().replace('Grade ', '') || '';
+    const marks = await Mark.find({ studentId, grade: gradeValue, term: parseInt(term), year: parseInt(year) })
       .sort({ subject: 1 });
 
-    const positions = await calculatePositions(student.grade, parseInt(term), parseInt(year));
+    const positions = await calculatePositions(gradeValue, parseInt(term), parseInt(year));
     const studentPosition = positions.find(p => p.studentId.toString() === studentId);
 
     const totalScore = marks.reduce((sum, m) => sum + m.score, 0);
@@ -350,7 +353,7 @@ const getStudentReportData = async (req, res, next) => {
     });
 
     const fee = await Fee.findOne({ studentId, term: parseInt(term), year: parseInt(year) });
-    const classTeacher = await User.findOne({ role: 'teacher', grade: student.grade }).select('name');
+    const classTeacher = await User.findOne({ role: 'teacher', grade: gradeValue }).select('name');
     const school = await SchoolDetails.findOne().select('name motto logo principal');
 
     res.json({
@@ -1049,7 +1052,7 @@ const generateTimetablePDF = async (req, res, next) => {
 
     const query = {};
     if (req.user.role === 'student') {
-      query.grade = req.user.grade;
+      query.grade = req.user.grade?.toString().replace('Grade ', '') || req.user.grade;
       if (req.user.assignedClass) query.assignedClass = req.user.assignedClass;
     } else if (req.user.role === 'teacher') {
       query.teacherId = req.user.id;

@@ -79,6 +79,7 @@ const StudentAssignments = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="badge badge-blue">{a.subject}</span>
+                    <span className="badge badge-gray">Grade {a.grade}</span>
                     {a.submissionStatus === 'graded' ? (
                       <span className="badge badge-green flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Graded: {a.submission?.grade}/{a.maxScore}</span>
                     ) : a.submissionStatus === 'submitted' ? (
@@ -91,6 +92,7 @@ const StudentAssignments = () => {
                   </div>
                   <h3 className="font-semibold text-gray-900">{a.title}</h3>
                   <p className="text-sm text-gray-600 mt-1">{a.description}</p>
+                  <p className="text-xs text-gray-400 mt-1">By: {a.teacherId?.name || 'Teacher'}</p>
                   {a.submission?.feedback && (
                     <div className="mt-3 p-3 bg-green-50 rounded-lg">
                       <p className="text-sm font-medium text-green-800">Teacher Feedback:</p>

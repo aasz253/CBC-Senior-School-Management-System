@@ -10,14 +10,17 @@ const TeacherAttendance = () => {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedGrade, setSelectedGrade] = useState(user?.classTeacherOf || '');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (user?.grade) {
+    if (selectedGrade) {
       fetchStudents();
+    } else {
+      setLoading(false);
     }
-  }, [user]);
+  }, [selectedGrade]);
 
   useEffect(() => {
     if (selectedDate && students.length > 0) {
@@ -27,10 +30,11 @@ const TeacherAttendance = () => {
 
   const fetchStudents = async () => {
     try {
-      const res = await api.get(`/users?role=student&grade=${user.grade}`);
-      setStudents(res.data.users);
+      setLoading(true);
+      const res = await api.get(`/users?role=student&grade=${selectedGrade}`);
+      setStudents(res.data.users || []);
       const initial = {};
-      res.data.users.forEach(s => { initial[s._id] = 'Present'; });
+      (res.data.users || []).forEach(s => { initial[s._id] = 'Present'; });
       setAttendance(initial);
     } catch (err) {
       showError('Failed to load students');
@@ -39,9 +43,12 @@ const TeacherAttendance = () => {
 
   const fetchExistingAttendance = async () => {
     try {
-      const res = await api.get(`/attendance?date=${selectedDate}&grade=${user.grade}`);
+      const res = await api.get(`/attendance?date=${selectedDate}&grade=${selectedGrade}`);
       const existing = {};
-      res.data.attendance.forEach(a => { existing[a.studentId] = a.status; });
+      (res.data.attendance || []).forEach(a => {
+        const sid = typeof a.studentId === 'string' ? a.studentId : a.studentId?._id;
+        if (sid) existing[sid] = a.status;
+      });
       setAttendance(prev => ({ ...prev, ...existing }));
     } catch (err) {
       console.error('Failed to load existing attendance');
@@ -52,12 +59,12 @@ const TeacherAttendance = () => {
     setSaving(true);
     try {
       const records = Object.entries(attendance).map(([studentId, status]) => ({
-        studentId, date: selectedDate, status, assignedClass: user.assignedClass,
+        studentId, date: selectedDate, status,
       }));
-      await api.post('/attendance/bulk', { date: selectedDate, assignedClass: user.assignedClass, records });
+      await api.post('/attendance/bulk', { date: selectedDate, grade: selectedGrade, records });
       showSuccess('Attendance saved successfully');
     } catch (err) {
-      showError('Failed to save attendance');
+      showError(err.response?.data?.message || 'Failed to save attendance');
     } finally { setSaving(false); }
   };
 
@@ -85,6 +92,16 @@ const TeacherAttendance = () => {
             <Calendar className="w-5 h-5 text-gray-400" />
             <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="input w-48" />
           </div>
+          <div className="flex items-center gap-2">
+            <select value={selectedGrade} onChange={(e) => { setSelectedGrade(e.target.value); setAttendance({}); }} className="input w-48">
+              <option value="">Select Grade</option>
+              {user?.classTeacherOf ? (
+                <option value={user.classTeacherOf}>Grade {user.classTeacherOf} (My Class)</option>
+              ) : (
+                ['7','8','9','10','11','12'].map(g => <option key={g} value={g}>Grade {g}</option>)
+              )}
+            </select>
+          </div>
           <div className="flex gap-4 text-sm">
             <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4 text-green-500" /> Present: {stats.present}</span>
             <span className="flex items-center gap-1"><XCircle className="w-4 h-4 text-red-500" /> Absent: {stats.absent}</span>
@@ -93,47 +110,53 @@ const TeacherAttendance = () => {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="table-header">Student</th>
-                <th className="table-header text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map(student => (
-                <tr key={student._id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="table-cell">
-                    <p className="font-medium text-gray-900">{student.name}</p>
-                    <p className="text-xs text-gray-500">{student.admissionNumber}</p>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center justify-center gap-2">
-                      {['Present', 'Absent', 'Late'].map(status => (
-                        <button
-                          key={status}
-                          onClick={() => setAttendance(prev => ({ ...prev, [student._id]: status }))}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                            attendance[student._id] === status
-                              ? status === 'Present' ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
-                              : status === 'Absent' ? 'bg-red-100 text-red-700 ring-2 ring-red-500'
-                              : 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {status}
-                        </button>
-                      ))}
-                    </div>
-                  </td>
+      {!selectedGrade ? (
+        <div className="card text-center py-12"><p className="text-gray-500">Please select a grade to mark attendance</p></div>
+      ) : students.length === 0 ? (
+        <div className="card text-center py-12"><p className="text-gray-500">No students found in this grade</p></div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="table-header">Student</th>
+                  <th className="table-header text-center">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {students.map(student => (
+                  <tr key={student._id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="table-cell">
+                      <p className="font-medium text-gray-900">{student.name}</p>
+                      <p className="text-xs text-gray-500">{student.admissionNumber}</p>
+                    </td>
+                    <td className="table-cell">
+                      <div className="flex items-center justify-center gap-2">
+                        {['Present', 'Absent', 'Late'].map(status => (
+                          <button
+                            key={status}
+                            onClick={() => setAttendance(prev => ({ ...prev, [student._id]: status }))}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                              attendance[student._id] === status
+                                ? status === 'Present' ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
+                                : status === 'Absent' ? 'bg-red-100 text-red-700 ring-2 ring-red-500'
+                                : 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-500'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

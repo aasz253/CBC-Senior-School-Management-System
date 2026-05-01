@@ -249,9 +249,16 @@ router.get('/fees/stats', async (req, res) => {
       { $sort: { _id: 1 } },
     ]);
 
+    const totalExp = totalExpected[0]?.total || 0;
+    const totalColl = totalPaid[0]?.total || 0;
+    const totalOut = Math.max(0, totalExp - totalColl);
+    const collectionRate = totalExp > 0 ? ((totalColl / totalExp) * 100).toFixed(1) : 0;
+
     res.json({
-      totalExpected: totalExpected[0]?.total || 0,
-      totalPaid: totalPaid[0]?.total || 0,
+      totalExpected: totalExp,
+      totalCollected: totalColl,
+      totalOutstanding: totalOut,
+      collectionRate: parseFloat(collectionRate),
       studentsWithBalance,
       studentsCleared,
       byGrade: byGrade.map(g => ({

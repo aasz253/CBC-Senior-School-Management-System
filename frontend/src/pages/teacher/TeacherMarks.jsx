@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Save, Loader, Search, Users } from 'lucide-react';
+import { Save, Loader, Search, FileDown } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -9,16 +9,24 @@ const TeacherMarks = () => {
   const { success: showSuccess, error: showError } = useToast();
   const [students, setStudents] = useState([]);
   const [marks, setMarks] = useState({});
-  const [filters, setFilters] = useState({ grade: user?.grade || '', term: '', year: '2026', subject: user?.assignedSubjects?.[0] || '' });
+  const [filters, setFilters] = useState({
+    grade: user?.classTeacherOf || '',
+    term: '',
+    year: '2026',
+    subject: user?.assignedSubjects?.[0] || '',
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (filters.grade && filters.term && filters.subject) {
       fetchStudentsAndMarks();
+    } else if (user?.classTeacherOf && !filters.grade) {
+      setFilters(f => ({ ...f, grade: user.classTeacherOf }));
     }
-  }, [filters]);
+  }, [filters.grade, filters.term, filters.subject]);
 
   const fetchStudentsAndMarks = async () => {
     try {
@@ -27,9 +35,12 @@ const TeacherMarks = () => {
         api.get(`/users?role=student&grade=${filters.grade}`),
         api.get(`/marks?grade=${filters.grade}&term=${filters.term}&year=${filters.year}&subject=${filters.subject}`),
       ]);
-      setStudents(studentsRes.data.users);
+      setStudents(studentsRes.data.users || []);
       const marksMap = {};
-      marksRes.data.marks.forEach(m => { marksMap[m.studentId] = m; });
+      (marksRes.data.marks || []).forEach(m => {
+        const sid = typeof m.studentId === 'string' ? m.studentId : m.studentId?._id;
+        if (sid) marksMap[sid] = m;
+      });
       setMarks(marksMap);
     } catch (err) {
       showError('Failed to load data');
@@ -39,7 +50,7 @@ const TeacherMarks = () => {
   const updateMark = (studentId, field, value) => {
     setMarks(prev => ({
       ...prev,
-      [studentId]: { ...(prev[studentId] || {}), studentId, ...filters, [field]: value },
+      [studentId]: { ...(prev[studentId] || {}), studentId, grade: filters.grade, term: parseInt(filters.term), year: parseInt(filters.year), subject: filters.subject, [field]: value },
     }));
   };
 
@@ -55,14 +66,45 @@ const TeacherMarks = () => {
     try {
       const marksArray = Object.values(marks).filter(m => m.score !== undefined && m.score !== '').map(m => {
         const comp = getCompetency(parseInt(m.score));
-        return { ...m, score: parseInt(m.score), competencyLevel: comp.level, competencyLabel: comp.label };
+        return {
+          ...m,
+          grade: filters.grade,
+          term: parseInt(filters.term),
+          year: parseInt(filters.year),
+          subject: filters.subject,
+          pathway: 'STEM',
+          score: parseInt(m.score),
+          competencyLevel: comp.level,
+          competencyLabel: comp.label,
+          teacherId: user.id,
+          assessmentType: 'End of Term',
+        };
       });
       if (marksArray.length === 0) return showError('No marks to save');
       await api.post('/marks/bulk', { marks: marksArray });
       showSuccess(`${marksArray.length} marks saved successfully`);
+      fetchStudentsAndMarks();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to save marks');
     } finally { setSaving(false); }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get(`/reports/marks/${filters.grade}?term=${filters.term}&year=${filters.year}&subject=${filters.subject}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `marks_Grade_${filters.grade}_T${filters.term}_${filters.subject}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Marks report downloaded');
+    } catch (err) {
+      showError('Failed to generate PDF');
+    } finally { setExporting(false); }
   };
 
   const filteredStudents = students.filter(s => {
@@ -77,14 +119,33 @@ const TeacherMarks = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Enter Marks</h1>
-          <p className="text-gray-600 mt-1">Enter CBC competency-based marks for your class</p>
+          <h1 className="text-2xl font-bold text-gray-900">Student Marks</h1>
+          <p className="text-gray-600 mt-1">
+            {filters.grade ? `Grade ${filters.grade}` : 'Select a class'}
+            {user?.classTeacherOf && ` (Class Teacher)`}
+          </p>
         </div>
-        <button onClick={handleSaveAll} disabled={saving} className="btn btn-primary flex items-center gap-2"><Save className="w-4 h-4" />{saving ? <span className="flex items-center"><Loader className="w-4 h-4 animate-spin mr-2" />Saving...</span> : 'Save All Marks'}</button>
+        <div className="flex gap-2">
+          <button onClick={handleExportPDF} disabled={exporting || !filters.grade} className="btn flex items-center gap-2 text-sm">
+            {exporting ? <Loader className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            Export PDF
+          </button>
+          <button onClick={handleSaveAll} disabled={saving} className="btn btn-primary flex items-center gap-2">
+            <Save className="w-4 h-4" />{saving ? 'Saving...' : 'Save All Marks'}
+          </button>
+        </div>
       </div>
 
       <div className="card p-4 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <select value={filters.grade} onChange={(e) => setFilters({ ...filters, grade: e.target.value })} className="input py-2">
+            <option value="">Select Grade</option>
+            {user?.classTeacherOf ? (
+              <option value={user.classTeacherOf}>Grade {user.classTeacherOf} (My Class)</option>
+            ) : (
+              ['10', '11', '12'].map(g => <option key={g} value={g}>Grade {g}</option>)
+            )}
+          </select>
           <select value={filters.subject} onChange={(e) => setFilters({ ...filters, subject: e.target.value })} className="input py-2">
             <option value="">Select Subject</option>
             {(user?.assignedSubjects || []).map(s => <option key={s} value={s}>{s}</option>)}
@@ -100,7 +161,7 @@ const TeacherMarks = () => {
           </select>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search student..." className="input pl-10 py-2" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="input pl-10 py-2" />
           </div>
         </div>
       </div>
@@ -108,13 +169,14 @@ const TeacherMarks = () => {
       {loading ? (
         <div className="flex justify-center py-12"><Loader className="w-8 h-8 animate-spin text-gray-400" /></div>
       ) : !filters.subject || !filters.term ? (
-        <div className="card text-center py-12"><p className="text-gray-500">Please select subject and term to enter marks</p></div>
+        <div className="card text-center py-12"><p className="text-gray-500">Please select grade, subject and term to view marks</p></div>
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50">
+                  <th className="table-header">#</th>
                   <th className="table-header">Student</th>
                   <th className="table-header">Score (0-100)</th>
                   <th className="table-header">Competency</th>
@@ -123,13 +185,14 @@ const TeacherMarks = () => {
               </thead>
               <tbody>
                 {filteredStudents.length === 0 ? (
-                  <tr><td colSpan="4" className="table-cell text-center py-12 text-gray-500">No students found</td></tr>
+                  <tr><td colSpan="5" className="table-cell text-center py-12 text-gray-500">No students found</td></tr>
                 ) : (
-                  filteredStudents.map(student => {
+                  filteredStudents.map((student, idx) => {
                     const mark = marks[student._id] || {};
                     const comp = mark.score ? getCompetency(parseInt(mark.score)) : null;
                     return (
                       <tr key={student._id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="table-cell text-sm text-gray-500">{idx + 1}</td>
                         <td className="table-cell">
                           <p className="font-medium text-gray-900">{student.name}</p>
                           <p className="text-xs text-gray-500">{student.admissionNumber}</p>
