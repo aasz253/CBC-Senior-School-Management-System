@@ -46,6 +46,7 @@ const AdminFees = () => {
   const [totalStudents, setTotalStudents] = useState(0);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showEditFeeModal, setShowEditFeeModal] = useState(false);
   const [reportTerm, setReportTerm] = useState('');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -56,6 +57,7 @@ const AdminFees = () => {
     amount: '',
     description: '',
   });
+  const [editFeeData, setEditFeeData] = useState({ totalDue: '', amountPaid: '', term: '', year: '' });
   const [paymentFormData, setPaymentFormData] = useState({
     amount: '',
     reference: '',
@@ -122,7 +124,50 @@ const AdminFees = () => {
   const closeModal = () => {
     setShowFeeModal(false);
     setShowPaymentModal(false);
+    setShowEditFeeModal(false);
     setSelectedStudent(null);
+  };
+
+  const openEditFeeModal = (student) => {
+    setSelectedStudent(student);
+    setEditFeeData({
+      totalDue: student.totalFees?.toString() || '',
+      amountPaid: student.paid?.toString() || '0',
+      term: student.term?.toString() || '',
+      year: student.year?.toString() || '',
+    });
+    setShowEditFeeModal(true);
+  };
+
+  const handleEditFeeSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (!selectedStudent?.feeId) {
+        const gradeValue = selectedStudent.grade.replace('Grade ', '');
+        await api.post('/admin/fees/structures', {
+          grade: selectedStudent.grade,
+          term: editFeeData.term,
+          year: editFeeData.year,
+          amount: parseFloat(editFeeData.totalDue),
+        });
+        showSuccess('Fee record created');
+      } else {
+        await api.put(`/admin/fees/${selectedStudent.feeId}`, {
+          totalDue: parseFloat(editFeeData.totalDue),
+          amountPaid: parseFloat(editFeeData.amountPaid || 0),
+          term: editFeeData.term,
+          year: editFeeData.year,
+        });
+        showSuccess('Fee updated successfully');
+      }
+      closeModal();
+      fetchData();
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to update fee');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleFeeSubmit = async (e) => {
@@ -411,13 +456,22 @@ const AdminFees = () => {
                       )}
                     </td>
                     <td className="table-cell text-center">
-                      <button
-                        onClick={() => openPaymentModal(student)}
-                        className="btn btn-primary text-xs py-1.5 px-3"
-                        disabled={student.balance <= 0}
-                      >
-                        Record Payment
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => openEditFeeModal(student)}
+                          className="btn bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs py-1.5 px-2"
+                          title="Edit Fee"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => openPaymentModal(student)}
+                          className="btn btn-primary text-xs py-1.5 px-3"
+                          disabled={student.balance <= 0}
+                        >
+                          Record Payment
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -600,6 +654,98 @@ const AdminFees = () => {
                 <button type="button" onClick={closeModal} className="btn flex-1">Cancel</button>
                 <button type="submit" disabled={submitting} className="btn btn-primary flex-1">
                   {submitting ? <Loader className="w-4 h-4 animate-spin" /> : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Fee Modal */}
+      {showEditFeeModal && selectedStudent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Fee</h2>
+              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 bg-gray-50 mx-6 mt-4 rounded-lg">
+              <p className="text-sm text-gray-600">Student: <strong>{selectedStudent.name}</strong></p>
+              <p className="text-sm text-gray-600">Admission: <strong>{selectedStudent.admissionNumber}</strong></p>
+              <p className="text-sm text-gray-600">Grade: <strong>{selectedStudent.grade}</strong></p>
+            </div>
+            <form onSubmit={handleEditFeeSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="label">Total Fee (KES)</label>
+                <input
+                  type="number"
+                  value={editFeeData.totalDue}
+                  onChange={(e) => setEditFeeData({ ...editFeeData, totalDue: e.target.value })}
+                  className="input"
+                  placeholder="e.g. 25000"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Amount Paid (KES)</label>
+                <input
+                  type="number"
+                  value={editFeeData.amountPaid}
+                  onChange={(e) => setEditFeeData({ ...editFeeData, amountPaid: e.target.value })}
+                  className="input"
+                  placeholder="e.g. 15000"
+                  min="0"
+                />
+              </div>
+              <div className="p-3 rounded-lg border" style={{
+                backgroundColor: parseFloat(editFeeData.amountPaid || 0) >= parseFloat(editFeeData.totalDue || 0) ? '#f0fdf4' : '#fef3c7',
+                borderColor: parseFloat(editFeeData.amountPaid || 0) >= parseFloat(editFeeData.totalDue || 0) ? '#bbf7d0' : '#fde68a',
+              }}>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Balance:</span>
+                  <strong className={parseFloat(editFeeData.amountPaid || 0) >= parseFloat(editFeeData.totalDue || 0) ? 'text-green-700' : 'text-red-700'}>
+                    KES {Math.max(0, (parseFloat(editFeeData.totalDue || 0) - parseFloat(editFeeData.amountPaid || 0))).toLocaleString()}
+                  </strong>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-600">Status:</span>
+                  <strong className={parseFloat(editFeeData.amountPaid || 0) >= parseFloat(editFeeData.totalDue || 0) ? 'text-green-700' : 'text-amber-700'}>
+                    {parseFloat(editFeeData.amountPaid || 0) >= parseFloat(editFeeData.totalDue || 0) ? 'FULLY PAID' : parseFloat(editFeeData.amountPaid || 0) > 0 ? 'PARTIAL' : 'UNPAID'}
+                  </strong>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Term</label>
+                  <select
+                    value={editFeeData.term}
+                    onChange={(e) => setEditFeeData({ ...editFeeData, term: e.target.value })}
+                    className="input"
+                    required
+                  >
+                    <option value="">Select Term</option>
+                    <option value="1">Term 1</option>
+                    <option value="2">Term 2</option>
+                    <option value="3">Term 3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Year</label>
+                  <input
+                    type="number"
+                    value={editFeeData.year}
+                    onChange={(e) => setEditFeeData({ ...editFeeData, year: e.target.value })}
+                    className="input"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={closeModal} className="btn flex-1">Cancel</button>
+                <button type="submit" disabled={submitting} className="btn btn-primary flex-1">
+                  {submitting ? <Loader className="w-4 h-4 animate-spin" /> : 'Update Fee'}
                 </button>
               </div>
             </form>

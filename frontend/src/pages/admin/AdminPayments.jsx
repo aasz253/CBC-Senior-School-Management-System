@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, AlertCircle, Search, Filter, ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertCircle, Search, Filter, ChevronLeft, ChevronRight, Loader, FileDown } from 'lucide-react';
 import api from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
 
@@ -15,6 +15,7 @@ const AdminPayments = () => {
   const [manualData, setManualData] = useState({ studentId: '', amount: '', paymentMethod: 'cash', transactionId: '', term: '', year: '2026' });
   const [students, setStudents] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { error: showError, success: showSuccess } = useToast();
   const itemsPerPage = 15;
 
@@ -72,6 +73,28 @@ const AdminPayments = () => {
 
   const statusColors = { completed: 'badge-green', pending: 'badge-yellow', failed: 'badge-red', cancelled: 'badge-gray', reversed: 'badge-red' };
 
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      const params = new URLSearchParams();
+      if (statusFilter) params.append('status', statusFilter);
+      const res = await api.get(`/reports/payments?${params}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `payment_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Payment report downloaded');
+    } catch (err) {
+      showError('Failed to generate payment report');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -79,7 +102,13 @@ const AdminPayments = () => {
           <h1 className="text-2xl font-bold text-gray-900">Payment Logs</h1>
           <p className="text-gray-600 mt-1">{total} total transactions</p>
         </div>
-        <button onClick={() => setShowManualModal(true)} className="btn btn-primary text-sm flex items-center gap-1"><DollarSign className="w-4 h-4" /> Record Manual Payment</button>
+        <div className="flex gap-2">
+          <button onClick={handleExportPDF} disabled={exporting} className="btn flex items-center gap-2 text-sm">
+            {exporting ? <Loader className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            Export PDF
+          </button>
+          <button onClick={() => setShowManualModal(true)} className="btn btn-primary text-sm flex items-center gap-1"><DollarSign className="w-4 h-4" /> Record Manual Payment</button>
+        </div>
       </div>
 
       <div className="card p-4 mb-6">

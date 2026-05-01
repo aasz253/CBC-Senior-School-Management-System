@@ -37,6 +37,7 @@ const Navbar = () => {
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/fees', label: 'Fees', icon: DollarSign },
     { path: '/admin/marks', label: 'Marks', icon: BarChart3 },
+    { path: '/admin/timetable', label: 'Timetable', icon: Clock },
     { path: '/admin/payments', label: 'Payments', icon: DollarSign },
     { path: '/admin/reports', label: 'Reports', icon: FileText },
     { path: '/admin/news', label: 'News', icon: Newspaper },

@@ -12,6 +12,7 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminFees from './pages/admin/AdminFees';
 import AdminMarks from './pages/admin/AdminMarks';
 import AdminPayments from './pages/admin/AdminPayments';
+import AdminTimetable from './pages/admin/AdminTimetable';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminNews from './pages/admin/AdminNews';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -92,6 +93,11 @@ function App() {
           <Route path="/admin/payments" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminPayments />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/timetable" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminTimetable />
             </ProtectedRoute>
           } />
           <Route path="/admin/settings" element={

@@ -32,7 +32,7 @@ const StudentMarks = () => {
     try {
       const term = filters.term || 1;
       const year = filters.year || 2026;
-      const response = await api.get(`/reports/generate/${user.id}/${term}/${year}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/student/${user.id}?term=${term}&year=${year}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;

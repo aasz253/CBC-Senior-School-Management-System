@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Phone, Loader, CheckCircle } from 'lucide-react';
+import { DollarSign, Phone, Loader, CheckCircle, FileDown, Filter } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -14,13 +14,18 @@ const StudentFees = () => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [payData, setPayData] = useState({ amount: '', phoneNumber: user?.parentPhone || user?.phone || '' });
   const [selectedFee, setSelectedFee] = useState(null);
+  const [filters, setFilters] = useState({ term: '', year: '2026' });
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const params = new URLSearchParams();
+        if (filters.term) params.append('term', filters.term);
+        if (filters.year) params.append('year', filters.year);
         const [feesRes, paymentsRes] = await Promise.all([
-          api.get('/fees'),
-          api.get('/payments'),
+          api.get(`/fees?${params}`),
+          api.get(`/payments?${params}`),
         ]);
         setFees(feesRes.data.fees);
         setPayments(paymentsRes.data.payments);
@@ -29,7 +34,27 @@ const StudentFees = () => {
       } finally { setLoading(false); }
     };
     fetchData();
-  }, []);
+  }, [filters]);
+
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get(`/reports/student/${user.id}/fee-statement?term=${filters.term || 1}&year=${filters.year}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `fee_statement_${user.admissionNumber}_T${filters.term || 'all'}_${filters.year}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Fee statement downloaded');
+    } catch (err) {
+      showError('Failed to generate fee statement');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handlePay = async (e) => {
     e.preventDefault();
@@ -58,6 +83,27 @@ const StudentFees = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">My Fees</h1>
         <p className="text-gray-600 mt-1">View fee balance and make payments via M-PESA</p>
+      </div>
+
+      {/* Filters */}
+      <div className="card p-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <select value={filters.term} onChange={(e) => setFilters({ ...filters, term: e.target.value })} className="input py-2 w-32">
+            <option value="">All Terms</option>
+            <option value="1">Term 1</option>
+            <option value="2">Term 2</option>
+            <option value="3">Term 3</option>
+          </select>
+          <select value={filters.year} onChange={(e) => setFilters({ ...filters, year: e.target.value })} className="input py-2 w-28">
+            {['2026','2027','2028','2029','2030'].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <div className="flex-1" />
+          <button onClick={handleExportPDF} disabled={exporting} className="btn flex items-center gap-2 text-sm">
+            {exporting ? <Loader className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            Export Fee Statement
+          </button>
+        </div>
       </div>
 
       {/* Fee Summary */}

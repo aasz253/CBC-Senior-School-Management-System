@@ -293,6 +293,7 @@ router.get('/fees/students', async (req, res) => {
         const fee = await Fee.findOne({ studentId: s._id }).sort({ year: -1, term: -1 });
         return {
           _id: s._id,
+          feeId: fee?._id || null,
           name: s.name,
           email: s.email,
           grade: s.grade ? `Grade ${s.grade}` : 'N/A',
@@ -402,23 +403,65 @@ router.post('/fees/payments', async (req, res) => {
   }
 });
 
+router.put('/fees/:id', async (req, res) => {
+  try {
+    const fee = await Fee.findById(req.params.id);
+    if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
+
+    const { totalDue, amountPaid, term, year, grade } = req.body;
+    if (totalDue !== undefined) fee.totalDue = parseFloat(totalDue);
+    if (amountPaid !== undefined) {
+      fee.amountPaid = parseFloat(amountPaid);
+      fee.balance = Math.max(0, fee.totalDue - fee.amountPaid);
+      fee.isFullyPaid = fee.balance <= 0;
+    }
+    if (term !== undefined) fee.term = parseInt(term);
+    if (year !== undefined) fee.year = parseInt(year);
+    if (grade !== undefined) fee.grade = grade;
+
+    await fee.save();
+
+    res.json({ success: true, fee });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ==================== ADMIN MARKS ====================
 
 router.get('/marks', async (req, res) => {
   try {
     const { grade, term, year } = req.query;
     const query = {};
-    if (grade) query.grade = grade;
-    if (term) query.term = term;
-    if (year) query.year = year;
+    if (grade) {
+      query.grade = grade.startsWith('Grade ') ? grade.replace('Grade ', '') : grade;
+    }
+    if (term) query.term = parseInt(term);
+    if (year) query.year = parseInt(year);
 
     const marks = await Mark.find(query)
-      .populate('studentId', 'name admissionNumber')
+      .populate('studentId', 'name admissionNumber grade')
       .populate('teacherId', 'name')
       .limit(100)
       .sort({ createdAt: -1 });
 
-    res.json({ marks });
+    const formatted = marks.map(m => ({
+      _id: m._id,
+      studentName: m.studentId?.name || 'Unknown',
+      admissionNumber: m.studentId?.admissionNumber || 'N/A',
+      grade: m.studentId?.grade ? `Grade ${m.studentId.grade}` : 'N/A',
+      subject: m.subject,
+      score: m.score,
+      assessmentType: m.assessmentType,
+      term: m.term,
+      year: m.year,
+      teacherName: m.teacherId?.name || 'Unknown',
+      teacherRemark: m.teacherRemark,
+      isApproved: m.isApproved,
+      createdAt: m.createdAt,
+    }));
+
+    res.json({ marks: formatted, total: formatted.length });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
