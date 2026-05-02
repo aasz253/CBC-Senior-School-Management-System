@@ -2,7 +2,7 @@
 
 A complete, production-ready school management system for Kenyan CBC Senior Schools (Grades 10, 11, 12). Built with the MERN stack (MongoDB, Express, React, Node.js) with M-PESA integration for fee payments.
 <p align="center">
-  <img src="screenshot.png" alt="App Screenshot" width="600"/>
+  <img src="[screenshot.png](https://github.com/aasz253/CBC-Senior-School-Management-System/commit/7a35d6dd186309b58c8fc79e5b6fbe1e6f62a0c3#diff-19fb3d8ee654e5d205821328970d90d467433eb936379bcd11dad91a18ddc329)" alt="App Screenshot" width="600"/>
   <br/>
   <em>App Home Screen</em>
 </p>
